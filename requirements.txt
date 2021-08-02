@@ -1,0 +1,10 @@
+aiohttp
+dateparser
+requests
+ujson
+websockets
+pyTelegramBotAPI==3.8.2
+python-binance==1.0.12
+django-redis==4.12.1
+django==3.1.4  
+celery==5.0.3
