@@ -7,6 +7,7 @@ application = get_wsgi_application()
 #####################################################################################
 import telebot
 import time
+import random
 from traderbot import settings
 from signals.models import FutureSignal, SpotSignal, EntryPrice, TakeProfit
 from users.models import BinanceUser, TelegramUser
@@ -307,11 +308,16 @@ def spot_take_profit_reciever(message, signal_id, take_profit_number, number_pos
 def spot_stop_loss_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
     if is_number:
+        binance = BinanceUser.objects.get(telegram_user=message.chat.id)
         spot = SpotSignal.objects.get(id=signal_id)
         spot.stop_loss = txt
         spot.save()
         sent = bot.send_message(message.chat.id, 'please wait about ~10 second')
-        # start a task and place order
+        spot_strategy.apply_async(
+            (binance.api_key, binance.secret_key, spot.id),
+            countdown=random.uniform(10, 15),
+            )
+
         sent = bot.reply_to(message, f'your order is submitted\n your order id is {spot.id} you can get more information \
         by sending your order id to /orderstatus')
     else:
