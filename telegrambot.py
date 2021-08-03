@@ -222,6 +222,7 @@ def position_reciever(message, signal_id):
 # TODO give volume by percent or dollor 
 # TODO give correct number of TPs 
 # TODO start task 
+# TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
 
 @bot.message_handler(commands=['newsignalS'])

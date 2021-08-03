@@ -1,5 +1,6 @@
 from django.contrib import admin
-from signals.models import FutureSignal, SpotSignal, SpotControler, EntryPrice, TakeProfit
+from signals.models import FutureSignal, SpotSignal, SpotControler, \
+    EntryPrice, TakeProfit, SpotOrder
 
 
 # @admin.register(FutureSignal)
@@ -16,3 +17,4 @@ admin.site.register(SpotSignal)
 admin.site.register(SpotControler)
 admin.site.register(EntryPrice)
 admin.site.register(TakeProfit)
+admin.site.register(SpotOrder)
