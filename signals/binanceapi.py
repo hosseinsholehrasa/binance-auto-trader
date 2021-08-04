@@ -60,8 +60,7 @@ def live_price(symb):
     else:
         return "wrong symbol name"
 
-def get_oco_order(api_key, secret_key, order_list_id):
-    client = Client(api_key, secret_key)
+def get_oco_order(client, order_list_id):
     timestamp = client.get_server_time()["serverTime"]
     params = {
         "timestamp": timestamp,
@@ -73,6 +72,24 @@ def get_oco_order(api_key, secret_key, order_list_id):
 def create_3_oco_orders(apikey, secretkey, spot_controller_id):
     pass
 
+def cancel_3_oco_orders(client, order4, order5, order6):
+    order4_response = get_oco_order(client, order4.order_id)
+    if not order4_response['listOrderStatus'] == "ALL_DONE":
+        client.cancel_order(symbol=order4.symbol_name, orderId=order4_response["orders"][0]["orderId"])
+        order4.status = client.ORDER_STATUS_CANCELED
+        order4.save()
+    
+    order5_response = get_oco_order(client, order5.order_id)
+    if not order5_response['listOrderStatus'] == "ALL_DONE":
+        client.cancel_order(symbol=order5.symbol_name, orderId=order5_response["orders"][0]["orderId"])
+        order5.status = client.ORDER_STATUS_CANCELED
+        order5.save()
+
+    order6_response = get_oco_order(client, order6.order_id)
+    if not order6_response['listOrderStatus'] == "ALL_DONE":
+        client.cancel_order(symbol=order6.symbol_name, orderId=order6_response["orders"][0]["orderId"])
+        order6.status = client.ORDER_STATUS_CANCELED
+        order6.save()
 
 # in OCO sell price is tp and limit and stop is stop loss
 # limit maker hamoon tp 
@@ -191,7 +208,9 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
         elif order2.isin_next_level == False:
             if order2.status == client.ORDER_STATUS_FILLED:
                 order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-                # TODO cancell  last 3 OCO
+                
+                # cancel 3 oco order
+                cancel_3_oco_orders(client, order4, order5, order6)
                 # remove last 3 orders
                 spot_controller.second_orders.remove(order4, order5, order6)
 
@@ -272,7 +291,10 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
         elif order3.isin_next_level == False:
             if order3.status == client.ORDER_STATUS_FILLED:
                 order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-                # TODO cancell  last 3 OCO binance
+                
+                # cancel 3 oco order
+                cancel_3_oco_orders(client, order4, order5, order6)
+                # remove last 3 orders
                 spot_controller.second_orders.remove(order4, order5, order6)
 
                 # order4 - order OCO for order 3
