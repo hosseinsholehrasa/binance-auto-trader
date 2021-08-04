@@ -50,6 +50,13 @@ def intialize_symbol_name():
     symbol_names = [all_tackers_name[i]['symbol'] for i in range(len(all_tackers_name))]
     return symbol_names
 
+stp1_spot = 50/100
+stp2_spot = 30/100
+stp3_spot = 20/100
+stp4_spot = 40/100
+stp5_spot = 40/100
+stp6_spot = 20/100
+
 
 # main
 def live_price(symb):
@@ -132,7 +139,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order4 - order OCO for order 1
                 OCO_order4 = client.order_oco_sell(
                     symbol=order1.symbol_name,
-                    quantity=((2*order1.volume/5)/price),
+                    quantity=((stp4_spot * order1.volume)/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -145,7 +152,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
-                    volume=(2*order1.volume/5),
+                    volume=(stp4_spot * order1.volume),
                     side="SELL",
                     priority=1,
                     type="OCO"
@@ -153,7 +160,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order5 - order OCO for order 1
                 OCO_order5 = client.order_oco_sell(
                     symbol=order1.symbol_name,
-                    quantity=((2*order1.volume/5)/price),
+                    quantity=((stp5_spot * order1.volume)/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -166,7 +173,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
-                    volume=(2*order1.volume/5),
+                    volume=(stp5_spot * order1.volume),
                     side="SELL",
                     priority=2,
                     type="OCO"
@@ -174,7 +181,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order6 - order OCO for order 1
                 OCO_order6 = client.order_oco_sell(
                     symbol=order1.symbol_name,
-                    quantity=((order1.volume/5)/price),
+                    quantity=((stp6_spot * order1.volume)/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -187,7 +194,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
-                    volume=(order1.volume/5),
+                    volume=(stp6_spot * order1.volume),
                     side="SELL",
                     priority=3,
                     type="OCO"
@@ -217,7 +224,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order4 - order OCO for order 2
                 OCO_order4 = client.order_oco_sell(
                     symbol=order2.symbol_name,
-                    quantity=((2*(order1.volume + order2.volume)/5)/price),
+                    quantity=((stp4_spot * (order1.volume + order2.volume))/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -230,7 +237,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
-                    volume=(2*(order1.volume + order2.volume)/5),
+                    volume=(stp4_spot * (order1.volume + order2.volume)),
                     side="SELL",
                     priority=1,
                     type="OCO"
@@ -238,7 +245,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order5 - order OCO for order 2
                 OCO_order5 = client.order_oco_sell(
                     symbol=order2.symbol_name,
-                    quantity=((2*(order1.volume + order2.volume)/5)/price),
+                    quantity=((stp5_spot * (order1.volume + order2.volume))/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -251,7 +258,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
-                    volume=(2*(order1.volume + order2.volume)/5),
+                    volume=(stp5_spot * (order1.volume + order2.volume)),
                     side="SELL",
                     priority=2,
                     type="OCO"
@@ -259,7 +266,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order6 - order OCO for order 2
                 OCO_order6 = client.order_oco_sell(
                     symbol=order2.symbol_name,
-                    quantity=(((order1.volume + order2.volume)/5)/price),
+                    quantity=((stp6_spot * (order1.volume + order2.volume + order3.volume))/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -272,7 +279,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
-                    volume=((order1.volume + order2.volume)/5),
+                    volume=(stp6_spot * (order1.volume + order2.volume + order3.volume)),
                     side="SELL",
                     priority=3,
                     type="OCO"
@@ -300,7 +307,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order4 - order OCO for order 3
                 OCO_order4 = client.order_oco_sell(
                     symbol=order3.symbol_name,
-                    quantity=((2*(order1.volume + order2.volume + order3.volume)/5)/price),
+                    quantity=(stp4_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -313,7 +320,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
-                    volume=(2*(order1.volume + order2.volume + order3.volume)/5),
+                    volume=(stp4_spot * (order1.volume + order2.volume + order3.volume)),
                     side="SELL",
                     priority=1,
                     type="OCO"
@@ -321,7 +328,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order5 - order OCO for order 3
                 OCO_order5 = client.order_oco_sell(
                     symbol=order3.symbol_name,
-                    quantity=((2*(order1.volume + order2.volume + order3.volume)/5)/price),
+                    quantity=(stp5_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -334,7 +341,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
-                    volume=(2*(order1.volume + order2.volume + order3.volume)/5),
+                    volume=(stp5_spot * (order1.volume + order2.volume + order3.volume)),
                     side="SELL",
                     priority=2,
                     type="OCO"
@@ -342,7 +349,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 # order6 - order OCO for order 3
                 OCO_order6 = client.order_oco_sell(
                     symbol=order3.symbol_name,
-                    quantity=(((order1.volume + order2.volume + order3.volume)/5)/price),
+                    quantity=(stp6_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -355,7 +362,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
-                    volume=((order1.volume + order2.volume + order3.volume)/5),
+                    volume=(stp6_spot * (order1.volume + order2.volume + order3.volume)),
                     side="SELL",
                     priority=3,
                     type="OCO"
@@ -395,7 +402,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 1 -  LIMIT order            
             limit_order1 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(math.floor((volume/5)/price)),
+                quantity=(((stp1_spot * volume)/price)),
                 price=entry_price.max_price,
                 timeInForce="GTC"
                 )
@@ -404,7 +411,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.max_price,
-                volume=volume/5,
+                volume=stp1_spot * volume,
                 side="BUY",
                 priority=1,
                 type="LIMIT"
@@ -414,7 +421,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=math.floor((2*volume/5)/price),
+                quantity=((stp2_spot*volume)/price),
                 price=mid_price,
                 timeInForce="GTC"
             )
@@ -423,7 +430,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=mid_price,
-                volume=(2*volume/5),
+                volume=(stp2_spot * volume),
                 side="BUY",
                 priority=2,
                 type="LIMIT"
@@ -432,7 +439,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=math.floor((2*volume/5)/price),
+                quantity=((stp3_spot * volume)/price),
                 price=entry_price.min_price,
                 timeInForce="GTC"
             )
@@ -441,7 +448,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.min_price,
-                volume=(2*volume/5),
+                volume=(stp3_spot * volume),
                 side="BUY",
                 priority=3,
                 type="LIMIT"
