@@ -24,11 +24,15 @@ class EntryPrice(models.Model):
     min_price = models.FloatField(null=True, blank=True)
     max_price = models.FloatField(null=True, blank=True)
 
+    def __str__(self) -> str:
+        return f"{self.min_price} - {self.max_price}"
 
 class TakeProfit(models.Model):
     price = models.FloatField(null=True, blank=True)
     level = models.IntegerField(default=1)
 
+    def __str__(self) -> str:
+        return f"{self.price} - {self.level}"
 
 class FutureSignal(models.Model):
     telegram_user = models.ForeignKey("users.TelegramUser", on_delete=models.CASCADE)
