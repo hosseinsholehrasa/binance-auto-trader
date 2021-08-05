@@ -87,32 +87,25 @@ def cancel_oco_orders(client, *args):
             order.status = client.ORDER_STATUS_CANCELED
             order.save()
 
-
-# @app.task
-# def spot_controller_checker2(apikey, secretkey, spot_controller_id, first_stage=True, second_stage=False):
-#     client = Client(apikey, secretkey)
-#     spot_controller = SpotControler.objects.get(id=spot_controller_id)
-#     price = live_price(spot_controller.spot_signal.symbol_name)
-#     order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-#     tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
-#     sl = spot_controller.spot_signal.stop_loss
-
-
     
 # in OCO sell price is tp and limit and stop is stop loss
 # limit maker hamoon tp 
 @app.task
-def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=True, second_stage=False):
+def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=True, second_stage=False):
+    
+    # INITIALIZATION
     client = Client(apikey, secretkey)
     spot_controller = SpotControler.objects.get(id=spot_controller_id)
+    spot_signal = spot_controller.spot_signal
     price = live_price(spot_controller.spot_signal.symbol_name)
-
-    # TODO be in another function when first_stage=False   
+    symbol = spot_controller.spot_signal.symbol_name
+    tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
+    sl = spot_controller.spot_signal.stop_loss
+    entry_price =  spot_controller.spot_signal.entry_prices.all()[0]
+    ###################### SECOND STAGE #####################  
     if second_stage:
         order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-        tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
-        sl = spot_controller.spot_signal.stop_loss
-        entry_price =  spot_controller.spot_signal.entry_prices.all()[0]
+
         # mesle payiini faghat order haye oonvaro bayad cancell kone 
         # baraye check kardanesh bayad did OCO che joorie
         if order4.isin_next_level == False:
@@ -253,7 +246,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
         else:
             return 0
 
-        spot_controller_checker1.apply_async(
+        spot_controller_checker.apply_async(
             (apikey, secretkey, spot_controller.id, first_stage, second_stage),
             countdown=random.uniform(10, 15),
             )
@@ -262,15 +255,14 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
     ###################### FIRST STAGE #####################
     if first_stage:
         order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
-        tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
-        sl = spot_controller.spot_signal.stop_loss
+
         # OCO1 gozashte shode? are pas boro baadi age na bebin filled shode ya na? age na check kon status age are pas bezar
         if order1.isin_next_level == False:
             if order1.status == client.ORDER_STATUS_FILLED:
 
                 # order4 - order OCO for order 1
                 OCO_order4 = client.order_oco_sell(
-                    symbol=order1.symbol_name,
+                    symbol=symbol,
                     quantity=((stp4_spot * order1.volume)/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
@@ -279,8 +271,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order4 = SpotOrder.objects.create(
                     order_id=OCO_order4["orderListId"],
-                    spot_signal=order1.spot_signal,
-                    symbol_name=order1.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
@@ -291,7 +283,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 # order5 - order OCO for order 1
                 OCO_order5 = client.order_oco_sell(
-                    symbol=order1.symbol_name,
+                    symbol=symbol,
                     quantity=((stp5_spot * order1.volume)/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
@@ -300,8 +292,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     )
                 order5 = SpotOrder.objects.create(
                     order_id=OCO_order5["orderListId"],
-                    spot_signal=order1.spot_signal,
-                    symbol_name=order1.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
@@ -312,7 +304,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )               
                 # order6 - order OCO for order 1
                 OCO_order6 = client.order_oco_sell(
-                    symbol=order1.symbol_name,
+                    symbol=symbol,
                     quantity=((stp6_spot * order1.volume)/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
@@ -321,8 +313,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order6 = SpotOrder.objects.create(
                     order_id=OCO_order6["orderListId"],
-                    spot_signal=order1.spot_signal,
-                    symbol_name=order1.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
@@ -333,13 +325,14 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )               
                 
                 spot_controller.second_orders.add(order4, order5, order6)
+                # time to check OCOs
                 second_stage = True 
                 order1.isin_next_level = True
                 order1.save()
 
             else:
                 # get order status
-                order = client.get_order(symbol=order1.symbol_name, orderId=order1.order_id)
+                order = client.get_order(symbol=symbol, orderId=order1.order_id)
                 if order["status"] == client.ORDER_STATUS_FILLED:
                     order1.status = client.ORDER_STATUS_FILLED
                     order1.save()
@@ -355,7 +348,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
 
                 # order4 - order OCO for order 2
                 OCO_order4 = client.order_oco_sell(
-                    symbol=order2.symbol_name,
+                    symbol=symbol,
                     quantity=((stp4_spot * (order1.volume + order2.volume))/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
@@ -364,8 +357,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order4 = SpotOrder.objects.create(
                     order_id=OCO_order4["orderListId"],
-                    spot_signal=order2.spot_signal,
-                    symbol_name=order2.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
@@ -376,7 +369,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 # order5 - order OCO for order 2
                 OCO_order5 = client.order_oco_sell(
-                    symbol=order2.symbol_name,
+                    symbol=symbol,
                     quantity=((stp5_spot * (order1.volume + order2.volume))/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
@@ -385,8 +378,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     )
                 order5 = SpotOrder.objects.create(
                     order_id=OCO_order5["orderListId"],
-                    spot_signal=order2.spot_signal,
-                    symbol_name=order2.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
@@ -397,8 +390,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )               
                 # order6 - order OCO for order 2
                 OCO_order6 = client.order_oco_sell(
-                    symbol=order2.symbol_name,
-                    quantity=((stp6_spot * (order1.volume + order2.volume + order3.volume))/price),
+                    symbol=symbol,
+                    quantity=((stp6_spot * (order1.volume + order2.volume))/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
                     stopLimitPrice=sl,
@@ -406,27 +399,27 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order6 = SpotOrder.objects.create(
                     order_id=OCO_order6["orderListId"],
-                    spot_signal=order2.spot_signal,
-                    symbol_name=order2.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
-                    volume=(stp6_spot * (order1.volume + order2.volume + order3.volume)),
+                    volume=(stp6_spot * (order1.volume + order2.volume)),
                     side="SELL",
                     priority=3,
                     type="OCO"
                 )  
 
                 spot_controller.second_orders.add(order4, order5, order6)
-                second_stage = True
                 order2.isin_next_level = True
                 order2.save()
             else:
                 # get order status
-                order = client.get_order(symbol=order2.symbol_name, orderId=order2.order_id)
+                order = client.get_order(symbol=symbol, orderId=order2.order_id)
                 if order["status"] == client.ORDER_STATUS_FILLED:
                     order2.status = client.ORDER_STATUS_FILLED
                     order2.save()
+
         elif order3.isin_next_level == False:
             if order3.status == client.ORDER_STATUS_FILLED:
                 order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
@@ -438,7 +431,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
 
                 # order4 - order OCO for order 3
                 OCO_order4 = client.order_oco_sell(
-                    symbol=order3.symbol_name,
+                    symbol=symbol,
                     quantity=(stp4_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp1,
                     stopPrice=((1/100*sl) + sl),
@@ -447,8 +440,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order4 = SpotOrder.objects.create(
                     order_id=OCO_order4["orderListId"],
-                    spot_signal=order3.spot_signal,
-                    symbol_name=order3.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp1,
                     take_profit=tp1,
                     stop_loss=sl,
@@ -459,7 +452,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 # order5 - order OCO for order 3
                 OCO_order5 = client.order_oco_sell(
-                    symbol=order3.symbol_name,
+                    symbol=symbol,
                     quantity=(stp5_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp2,
                     stopPrice=((1/100*sl) + sl),
@@ -468,8 +461,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                     )
                 order5 = SpotOrder.objects.create(
                     order_id=OCO_order5["orderListId"],
-                    spot_signal=order3.spot_signal,
-                    symbol_name=order3.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=sl,
@@ -480,7 +473,7 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )               
                 # order6 - order OCO for order 3
                 OCO_order6 = client.order_oco_sell(
-                    symbol=order3.symbol_name,
+                    symbol=symbol,
                     quantity=(stp6_spot * (order1.volume + order2.volume + order3.volume)/price),
                     price=tp3,
                     stopPrice=((1/100*sl) + sl),
@@ -489,8 +482,8 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 )
                 order6 = SpotOrder.objects.create(
                     order_id=OCO_order6["orderListId"],
-                    spot_signal=order3.spot_signal,
-                    symbol_name=order3.symbol,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=sl,
@@ -508,13 +501,13 @@ def spot_controller_checker1(apikey, secretkey, spot_controller_id, first_stage=
                 order3.save()
             else:
                 # get order status
-                order = client.get_order(symbol=order3.symbol_name, orderId=order3.order_id)
+                order = client.get_order(symbol=symbol, orderId=order3.order_id)
                 if order["status"] == client.ORDER_STATUS_FILLED:
                     order3.status = client.ORDER_STATUS_FILLED
                     order3.save()
 
 
-        spot_controller_checker1.apply_async(
+        spot_controller_checker.apply_async(
             (apikey, secretkey, spot_controller.id, first_stage, second_stage),
             countdown=random.uniform(10, 15),
             )
@@ -590,7 +583,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # create spot controller
             spot_controller = SpotControler.objects.create(spot_signal=signal)
             spot_controller.first_orders.add(order1, order2, order3)
-            spot_controller_checker1.apply_async(
+            spot_controller_checker.apply_async(
                 (apikey, secretkey, spot_controller.id),
                 countdown=random.uniform(10, 15),
             )
@@ -603,20 +596,19 @@ def spot_strategy(apikey, secretkey, signal_id):
         except (BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException):
             pass
     else:
-        # 20 40 40
         try:         
 
             # ORDER 1 -  MARKET order    
             market_order1 = client.order_market_buy(
                 symbol=symbol,
-                quoteOrderQty=(volume/5)
+                quoteOrderQty=(stp1_spot * volume)
             )
             order1 = SpotOrder.objects.create(
                 order_id=market_order1["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=price,
-                volume=volume/5,
+                volume=stp1_spot * volume,
                 side="BUY",
                 priority=1,
                 type="MARKET"
@@ -626,7 +618,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=math.floor((2*volume/5)/price),
+                quantity=(stp2_spot * volume / price),
                 price=mid_price,
                 timeInForce="GTC"
             )
@@ -635,7 +627,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=mid_price,
-                volume=(2*volume/5),
+                volume=(stp2_spot * volume),
                 side="BUY",
                 priority=2,
                 type="LIMIT"
@@ -644,7 +636,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=math.floor((2*volume/5)/price),
+                quantity=(stp3_spot * volume / price),
                 price=entry_price.min_price,
                 timeInForce="GTC"
             )
@@ -653,7 +645,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.min_price,
-                volume=(2*volume/5),
+                volume=(stp3_spot * volume),
                 side="BUY",
                 priority=3,
                 type="LIMIT"
@@ -665,7 +657,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             spot_controller = SpotControler.objects.create(spot_signal=signal)
             spot_controller.first_orders.add(order1, order2, order3)
 
-            spot_controller_checker1.apply_async(
+            spot_controller_checker.apply_async(
                 (apikey, secretkey, spot_controller.id),
                 countdown=random.uniform(10, 15),
             )
