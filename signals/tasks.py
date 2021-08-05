@@ -23,6 +23,7 @@ import os
 import random
 import math
 import requests
+import time
 from signals.models import EntryPrice, SpotControler, SpotSignal, SpotOrder
 from users.models import TelegramUser, BinanceUser
 from binance import Client
@@ -56,7 +57,7 @@ stp3_spot = 20/100
 stp4_spot = 40/100
 stp5_spot = 40/100
 stp6_spot = 20/100
-
+slp_pr_ordr = 1.5
 
 # main
 def live_price(symb):
@@ -132,6 +133,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
     if second_stage:
         order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
         print(f"order4 second stage next level: {order4.isin_next_level},status: {order4.status}")
+        print(f"order5 second stage next level: {order5.isin_next_level},status: {order5.status}")
+
         # mesle payiini faghat order haye oonvaro bayad cancell kone 
         if order4.isin_next_level == False:
             if order4.status == client.ORDER_STATUS_FILLED:
@@ -167,7 +170,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     side="SELL",
                     priority=2,
                     type="OCO"
-                )               
+                )   
+                time.sleep(slp_pr_ordr)            
                 # order6 - order OCOs updates
                 OCO_order6 = client.order_oco_sell(
                     symbol=symbol,
@@ -215,7 +219,6 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                         return 0    
 
         elif order5.isin_next_level == False:
-            print(f"order5 second stage next level: {order5.isin_next_level},status: {order5.status}")
             if order5.status == client.ORDER_STATUS_FILLED:
                 order5.isin_next_level = True
                 order5.save()
@@ -315,6 +318,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=1,
                     type="OCO"
                 )
+                time.sleep(slp_pr_ordr)
                 # order5 - order OCO for order 1
                 OCO_order5 = client.order_oco_sell(
                     symbol=symbol,
@@ -335,7 +339,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     side="SELL",
                     priority=2,
                     type="OCO"
-                )               
+                )
+                time.sleep(slp_pr_ordr)               
                 # order6 - order OCO for order 1
                 OCO_order6 = client.order_oco_sell(
                     symbol=symbol,
@@ -403,6 +408,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=1,
                     type="OCO"
                 )
+                time.sleep(slp_pr_ordr)
                 # order5 - order OCO for order 2
                 OCO_order5 = client.order_oco_sell(
                     symbol=symbol,
@@ -423,7 +429,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     side="SELL",
                     priority=2,
                     type="OCO"
-                )               
+                )     
+                time.sleep(slp_pr_ordr)          
                 # order6 - order OCO for order 2
                 OCO_order6 = client.order_oco_sell(
                     symbol=symbol,
@@ -487,6 +494,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=1,
                     type="OCO"
                 )
+                time.sleep(slp_pr_ordr)
                 # order5 - order OCO for order 3
                 OCO_order5 = client.order_oco_sell(
                     symbol=symbol,
@@ -507,7 +515,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     side="SELL",
                     priority=2,
                     type="OCO"
-                )               
+                )    
+                time.sleep(slp_pr_ordr)           
                 # order6 - order OCO for order 3
                 OCO_order6 = client.order_oco_sell(
                     symbol=symbol,
@@ -579,7 +588,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=1,
                 type="LIMIT"
             )
-            
+            time.sleep(slp_pr_ordr)
             # ORDER 2 -  LIMIT order    
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
@@ -599,7 +608,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=2,
                 type="LIMIT"
             )
-
+            time.sleep(slp_pr_ordr)
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
@@ -655,7 +664,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=1,
                 type="MARKET"
             )
-
+            time.sleep(slp_pr_ordr)
             # ORDER 2 -  LIMIT order 
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
@@ -675,7 +684,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=2,
                 type="LIMIT"
             )
-
+            time.sleep(slp_pr_ordr)
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
