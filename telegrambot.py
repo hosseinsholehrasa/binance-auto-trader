@@ -11,7 +11,7 @@ import random
 from traderbot import settings
 from signals.models import FutureSignal, SpotSignal, EntryPrice, TakeProfit
 from users.models import BinanceUser, TelegramUser
-from signals.binanceapi import intialize_symbol_name, live_price, spot_strategy
+from signals.tasks import intialize_symbol_name, live_price, spot_strategy
 
 # TODO show live data 
 # TODO transaction request status
@@ -324,7 +324,7 @@ def spot_stop_loss_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_stop_loss_reciever, signal_id)
 
 
-# spot_strategy("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
+spot_strategy.delay("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
 # @bot.message_handler()
 # def stock_request(message):
 #     request = message.text.split()
