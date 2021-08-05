@@ -19,23 +19,23 @@ from binance.exceptions import BinanceRequestException, BinanceAPIException, Bin
     BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException
 
 ############################# CELERY CONFIGURATOIN
-from celery import Celery
-REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
-REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
-BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
-app = Celery('tasks', broker=BROKER_URL, backend=BROKER_URL)
-app.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='Asia/Tehran',
-    enable_utc=True,
-)
+# from celery import Celery
+# REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+# REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
+# BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
+# app = Celery('tasks', broker=BROKER_URL, backend=BROKER_URL)
+# app.conf.update(
+#     task_serializer='json',
+#     accept_content=['json'],
+#     result_serializer='json',
+#     timezone='Asia/Tehran',
+#     enable_utc=True,
+# )
 
 
 
 # from django.conf import settings
-# from traderbot.celery import app
+from traderbot.celery import app
 
 
 # secretkey = settings.BINANCE_SECRET_KEY
@@ -66,6 +66,22 @@ def live_price(symb):
         return float(price_dic['price'])
     else:
         return "wrong symbol name"
+
+
+def round_decimals_down(number:float, decimals:int=4):
+    """
+    Returns a value rounded down to a specific number of decimal places.
+    """
+    if decimals == 0:
+        return math.floor(number)
+
+    factor = 10 ** decimals
+    return math.floor(number * factor) / factor
+
+
+def volume_calculator(volume, commission=0.001):
+    return round_decimals_down(volume - volume * commission , 6)
+
 
 def get_oco_order(client, order_list_id):
     timestamp = client.get_server_time()["serverTime"]
@@ -534,16 +550,17 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 1 -  LIMIT order            
             limit_order1 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(((stp1_spot * volume)/price)),
+                quantity=round_decimals_down(stp1_spot * volume / entry_price.max_price),
                 price=entry_price.max_price,
                 timeInForce="GTC"
                 )
+            print(limit_order1)
             order1 = SpotOrder.objects.create(
                 order_id=limit_order1["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.max_price,
-                volume=stp1_spot * volume,
+                volume=volume_calculator(limit_order1["origQty"]),
                 side="BUY",
                 priority=1,
                 type="LIMIT"
@@ -553,16 +570,17 @@ def spot_strategy(apikey, secretkey, signal_id):
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=((stp2_spot*volume)/price),
+                quantity=round_decimals_down(stp2_spot * volume / mid_price),
                 price=mid_price,
                 timeInForce="GTC"
             )
+            print(limit_order2)
             order2 = SpotOrder.objects.create(
                 order_id=limit_order2["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=mid_price,
-                volume=(stp2_spot * volume),
+                volume=volume_calculator(limit_order2["origQty"]),
                 side="BUY",
                 priority=2,
                 type="LIMIT"
@@ -571,7 +589,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=((stp3_spot * volume)/price),
+                quantity=round_decimals_down(stp3_spot * volume / entry_price.min_price),
                 price=entry_price.min_price,
                 timeInForce="GTC"
             )
@@ -580,7 +598,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.min_price,
-                volume=(stp3_spot * volume),
+                volume=volume_calculator(limit_order3["origQty"]),
                 side="BUY",
                 priority=3,
                 type="LIMIT"
@@ -604,37 +622,43 @@ def spot_strategy(apikey, secretkey, signal_id):
             pass
     else:
         try:         
-
+            # jabejayii noghte hadaksar
+            entry_price.max_price = price
+            entry_price.save()
             # ORDER 1 -  MARKET order    
             market_order1 = client.order_market_buy(
                 symbol=symbol,
                 quoteOrderQty=(stp1_spot * volume)
             )
+            print(market_order1)
             order1 = SpotOrder.objects.create(
                 order_id=market_order1["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=price,
-                volume=stp1_spot * volume,
+                volume=volume_calculator(market_order1["origQty"]),
                 side="BUY",
                 priority=1,
                 type="MARKET"
             )
+            print(order1)
 
             # ORDER 2 -  LIMIT order 
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
+            print(mid_price)
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(stp2_spot * volume / price),
+                quantity=(stp2_spot * volume / mid_price),
                 price=mid_price,
                 timeInForce="GTC"
             )
+            print(limit_order2)
             order2 = SpotOrder.objects.create(
                 order_id=limit_order2["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=mid_price,
-                volume=(stp2_spot * volume),
+                volume=volume_calculator(limit_order2["origQty"]),
                 side="BUY",
                 priority=2,
                 type="LIMIT"
@@ -643,16 +667,17 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(stp3_spot * volume / price),
+                quantity=(stp3_spot * volume / entry_price.min_price),
                 price=entry_price.min_price,
                 timeInForce="GTC"
             )
+            print(limit_order3)
             order3 = SpotOrder.objects.create(
                 order_id=limit_order3["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
                 price=entry_price.min_price,
-                volume=(stp3_spot * volume),
+                volume=volume_calculator(limit_order3["origQty"]),
                 side="BUY",
                 priority=3,
                 type="LIMIT"

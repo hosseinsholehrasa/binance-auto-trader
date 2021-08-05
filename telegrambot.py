@@ -312,7 +312,6 @@ def spot_stop_loss_reciever(message, signal_id):
         spot = SpotSignal.objects.get(id=signal_id)
         spot.stop_loss = txt
         spot.save()
-        sent = bot.send_message(message.chat.id, 'please wait about ~10 second')
         spot_strategy.apply_async(
             (binance.api_key, binance.secret_key, spot.id),
             countdown=random.uniform(10, 15),
@@ -325,7 +324,7 @@ def spot_stop_loss_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_stop_loss_reciever, signal_id)
 
 
-
+# spot_strategy("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
 # @bot.message_handler()
 # def stock_request(message):
 #     request = message.text.split()
