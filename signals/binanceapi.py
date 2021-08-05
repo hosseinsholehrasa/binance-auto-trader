@@ -102,12 +102,14 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
     tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
     sl = spot_controller.spot_signal.stop_loss
     entry_price =  spot_controller.spot_signal.entry_prices.all()[0]
+    mid_price = (entry_price.max_price + entry_price.min_price) / 2
+
+    
     ###################### SECOND STAGE #####################  
     if second_stage:
         order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
 
         # mesle payiini faghat order haye oonvaro bayad cancell kone 
-        # baraye check kardanesh bayad did OCO che joorie
         if order4.isin_next_level == False:
             if order4.status == client.ORDER_STATUS_FILLED:
                 order4.isin_next_level = True
@@ -118,13 +120,13 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 # remove oco orders
                 spot_controller.second_orders.remove(order5, order6)
 
+                # darsad kharid ghablan rooye hajm anjam shode
                 order5_volume = order5.volume
                 order6_volume = order6.volume
-                mid_price = (entry_price.max_price + entry_price.min_price) / 2
 
                 # order5 - order OCOs changes
                 OCO_order5 = client.order_oco_sell(
-                    symbol=order4.symbol_name,
+                    symbol=symbol,
                     quantity=(order5_volume/price),
                     price=tp2,
                     stopPrice=((1/100*mid_price) + mid_price),
@@ -133,8 +135,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     )
                 order5 = SpotOrder.objects.create(
                     order_id=OCO_order5["orderListId"],
-                    spot_signal=order4.spot_signal,
-                    symbol_name=order4.symbol_name,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp2,
                     take_profit=tp2,
                     stop_loss=mid_price,
@@ -143,9 +145,9 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=2,
                     type="OCO"
                 )               
-                # order6 - order OCO for order 2
+                # order6 - order OCOs updates
                 OCO_order6 = client.order_oco_sell(
-                    symbol=order4.symbol_name,
+                    symbol=symbol,
                     quantity=(order6_volume/price),
                     price=tp3,
                     stopPrice=((1/100*mid_price) + mid_price),
@@ -154,8 +156,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 )
                 order6 = SpotOrder.objects.create(
                     order_id=OCO_order6["orderListId"],
-                    spot_signal=order4.spot_signal,
-                    symbol_name=order4.symbol_name,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=mid_price,
@@ -172,17 +174,20 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 order4_response = get_oco_order(client, order4.order_id)
                 if order4_response['listOrderStatus'] == "ALL_DONE":
                     order4_1 = client.get_order(symbol=order4.symbol_name, orderId=order4_response["orders"][0]["orderId"])
-                    # we get first take profit
+                    # we reached first take profit
                     if order4_1["status"] == client.ORDER_STATUS_FILLED and order4_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
                         order4.status = client.ORDER_STATUS_FILLED
                         order4.save()
                     # stop loss triglled
                     else:
                         order4.status = client.ORDER_STATUS_CANCELED
+                        order4.price = sl
                         order4.save()
                         order5.status = client.ORDER_STATUS_CANCELED
+                        order5.price = sl
                         order5.save()
                         order6.status = client.ORDER_STATUS_CANCELED
+                        order6.price = sl
                         order6.save()
                         return 0    
 
@@ -201,7 +206,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
            
                 # order6 - order OCOs changes
                 OCO_order6 = client.order_oco_sell(
-                    symbol=order4.symbol_name,
+                    symbol=symbol,
                     quantity=(order6_volume/price),
                     price=tp3,
                     stopPrice=((1/100*tp1) + tp1),
@@ -210,8 +215,8 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 )
                 order6 = SpotOrder.objects.create(
                     order_id=OCO_order6["orderListId"],
-                    spot_signal=order4.spot_signal,
-                    symbol_name=order4.symbol_name,
+                    spot_signal=spot_signal,
+                    symbol_name=symbol,
                     price=tp3,
                     take_profit=tp3,
                     stop_loss=tp1,
@@ -227,7 +232,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 # get order status
                 order5_response = get_oco_order(client, order5.order_id)
                 if order5_response['listOrderStatus'] == "ALL_DONE":
-                    order5_1 = client.get_order(symbol=order5.symbol_name, orderId=order5_response["orders"][0]["orderId"])
+                    order5_1 = client.get_order(symbol=symbol, orderId=order5_response["orders"][0]["orderId"])
                     # we get first take profit
                     if order5_1["status"] == client.ORDER_STATUS_FILLED and order5_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
                         order5.status = client.ORDER_STATUS_FILLED
@@ -238,8 +243,10 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     # stop loss triglled
                     else:
                         order5.status = client.ORDER_STATUS_CANCELED
+                        order5.price = mid_price
                         order5.save()
                         order6.status = client.ORDER_STATUS_CANCELED
+                        order6.price = mid_price
                         order6.save()
                         return 0    
         # TODO we can track the order6 but not neccessery for now just get it filled
