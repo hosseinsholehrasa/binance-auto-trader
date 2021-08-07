@@ -69,7 +69,7 @@ def live_price(symb):
         return "wrong symbol name"
 
 
-def round_decimals_down(number:float, decimals:int=4):
+def round_decimals_down(number:float, decimals:int=6):
     """
     Returns a value rounded down to a specific number of decimal places.
     """
@@ -322,10 +322,6 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
         else:
             return 0
 
-        spot_controller_checker.apply_async(
-            (apikey, secretkey, spot_controller.id, first_stage, second_stage),
-            countdown=random.uniform(10, 15),
-            )
 
 
     ###################### FIRST STAGE #####################
@@ -361,6 +357,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=1,
                     type="OCO"
                 )
+                print(OCO_order4)
                 time.sleep(slp_pr_ordr)
                 # order5 - order OCO for order 1
                 OCO_order5 = client.order_oco_sell(
@@ -383,6 +380,12 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=2,
                     type="OCO"
                 )
+
+                print(OCO_order5)
+                print(price_calculator(tp3.price, tick_size))
+                print(order1.volume)
+                print(round_decimals_down(stp6_spot * order1.volume))
+
                 time.sleep(slp_pr_ordr)               
                 # order6 - order OCO for order 1
                 OCO_order6 = client.order_oco_sell(
@@ -405,6 +408,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     priority=3,
                     type="OCO"
                 )               
+                print(OCO_order6)
                 
                 spot_controller.second_orders.add(order4, order5, order6)
                 # time to check OCOs
@@ -596,10 +600,10 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                     order3.save()
 
 
-        spot_controller_checker.apply_async(
-            (apikey, secretkey, spot_controller.id, first_stage, second_stage),
-            countdown=random.uniform(10, 15),
-            )
+    spot_controller_checker.apply_async(
+        (apikey, secretkey, spot_controller.id, first_stage, second_stage),
+        countdown=random.uniform(10, 15),
+        )
 
 @app.task
 def spot_strategy(apikey, secretkey, signal_id):
