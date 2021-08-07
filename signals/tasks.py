@@ -81,6 +81,7 @@ def round_decimals_down(number:float, decimals:int=4):
 
 
 def volume_calculator(volume, commission=0.001):
+    # precision = 10 - len(str(int(tick_size * (10 ** 10)))) + 1
     precision = 6
     amount = round_decimals_down(volume - volume * commission , 6)
     amount_str = '{:0.0{}f}'.format(amount, precision)
@@ -159,6 +160,7 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
     
     ###################### SECOND STAGE #####################  
     if second_stage:
+        order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
         order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
         print(f"order4 second stage next level: {order4.isin_next_level},status: {order4.status}")
         print(f"order5 second stage next level: {order5.isin_next_level},status: {order5.status}")
@@ -168,7 +170,20 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
             if order4.status == client.ORDER_STATUS_FILLED:
                 order4.isin_next_level = True
                 order4.save()
-                first_stage = False   
+                first_stage = False 
+
+                # check limit orders that not filled to cancel it
+                # cancel order 2 va 3
+                if not order2.status == client.ORDER_STATUS_FILLED:
+                    client.cancel_order(symbol=symbol, orderId=order2.id)
+                    order2.status = client.ORDER_STATUS_CANCELED
+                    order2.save() 
+                if not order3.status == client.ORDER_STATUS_FILLED:
+                    client.cancel_order(symbol=symbol, orderId=order3.id)
+                    order3.status = client.ORDER_STATUS_CANCELED
+                    order3.save()
+
+
                 # cancel oco orders 
                 cancel_oco_orders(client, order5, order6)
                 # remove oco orders
@@ -601,7 +616,6 @@ def spot_strategy(apikey, secretkey, signal_id):
             tick_size = float(filter['tickSize'])
 
     mid_price = (entry_price.max_price + entry_price.min_price) / 2 
-    print(mid_price)
 
     if entry_price.max_price < price:
         try:
@@ -700,7 +714,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 order_id=market_order1["orderId"],
                 spot_signal=signal,
                 symbol_name=symbol,
-                price=price,
+                price=price_calculator(price, tick_size),
                 volume=volume_calculator(float(market_order1["origQty"])),
                 side="BUY",
                 priority=1,
@@ -711,7 +725,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(stp2_spot * volume / mid_price),
+                quantity=round_decimals_down(stp2_spot * volume / mid_price),
                 price=price_calculator(mid_price, tick_size),
                 timeInForce="GTC"
             )
@@ -730,7 +744,7 @@ def spot_strategy(apikey, secretkey, signal_id):
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
-                quantity=(stp3_spot * volume / entry_price.min_price),
+                quantity=round_decimals_down(stp3_spot * volume / entry_price.min_price),
                 price=price_calculator(entry_price.min_price, tick_size),
                 timeInForce="GTC"
             )
