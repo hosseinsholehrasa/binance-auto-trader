@@ -69,6 +69,13 @@ def live_price(symb):
     else:
         return "wrong symbol name"
 
+def show_user_balance(apikey, secretkey, symbol, type="spot"):
+    client = Client(apikey, secretkey)
+    if type == 'spot':
+        balance = client.get_asset_balance(symbol)
+        return balance
+    return None
+
 def volume_checker(volume, symbol):
     client = Client(apikey, secretkey)
     info = client.get_symbol_info(symbol)

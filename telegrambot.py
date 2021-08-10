@@ -12,7 +12,7 @@ from traderbot import settings
 from signals.models import FutureSignal, SpotSignal, EntryPrice, TakeProfit
 from users.models import BinanceUser, TelegramUser
 from signals.tasks import intialize_symbol_name, live_price, spot_strategy, price_filter_check, \
-    volume_checker
+    volume_checker, show_user_balance
 
 # TODO transaction request status
 # TODO ramz kardan key ha
@@ -47,6 +47,25 @@ def start(message):
 ثبت api key و secret key بایننس /savekeys
 نمایش کلید ذخیره کرده بایننس /showkeys"""
 )
+
+# show balance
+@bot.message_handler(commands=['showbalance'])
+def show_asset_balance(message):
+    sent = bot.reply_to(message, "Enter symbol name\n for example USDT")
+    bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
+
+def symbol_asset_balance_reciever(message):
+    user = BinanceUser.objects.get(telegram_user=message.chat.id)
+    balance = show_user_balance(user.api_key, user.secret_key, message.text)
+    if not balance:
+        sent = bot.send_message(message.chat.id, "enter correct symbol name")
+        bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
+    else:
+        sent = bot.send_message(
+            message.chat.id,
+            f"{balance['asset']}: \nfree:{balance['free']}\nlocked:{balance['locked']}"
+        )
+
 
 #  save binance api keys button
 @bot.message_handler(commands=['savekeys'])
