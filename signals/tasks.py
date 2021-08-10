@@ -95,15 +95,17 @@ def price_calculator(price, tick_size):
     amount_str = '{:0.0{}f}'.format(amount, precision)
     return amount
 
-def price_filter_check(client, symbol, amount):
+def price_filter_check(symbol, amount):
+    client = Client(apikey, secretkey)
     info = client.get_symbol_info(symbol)
     price = live_price(symbol)
     for filter in info["filters"]:
+        print("g", filter)
         if filter['filterType'] == "PERCENT_PRICE":
-            if not price * filter['multiplierDown']  <= amount <= price * filter['multiplierUp']:
+            if not price * float(filter['multiplierDown'])  <= amount <= price * float(filter['multiplierUp']):
                 return False
         if filter['filterType'] == "PRICE_FILTER":
-            if not filter['minPrice'] <= amount <= filter['maxPrice']:
+            if not float(filter['minPrice']) <= amount <= float(filter['maxPrice']):
                 return False
     return True
 

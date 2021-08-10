@@ -11,7 +11,7 @@ import random
 from traderbot import settings
 from signals.models import FutureSignal, SpotSignal, EntryPrice, TakeProfit
 from users.models import BinanceUser, TelegramUser
-from signals.tasks import intialize_symbol_name, live_price, spot_strategy
+from signals.tasks import intialize_symbol_name, live_price, spot_strategy, price_filter_check
 
 # TODO show live data 
 # TODO transaction request status
@@ -57,27 +57,27 @@ def save_keys(message):
 def save_api_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
-        user.api_key = message.text   
-        user.save()       
+        user.api_key = message.text
+        user.save()
         sent = bot.send_message(message.chat.id, "Enter your binance secret key")
         bot.register_next_step_handler(sent, save_secret_key)
 
     else:
         bot.send_message(message.chat.id, 'Please enter a correct keys')
         bot.register_next_step_handler(message, save_api_key)
-    
+
     bot.delete_message(message.chat.id, message.message_id)
 
 def save_secret_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
-        user.secret_key = message.text   
-        user.save()  
+        user.secret_key = message.text
+        user.save()
         bot.send_message(message.chat.id, 'DONE')
     else:
         bot.send_message(message.chat.id, 'Please enter a correct keys')
         bot.register_next_step_handler(message, save_secret_key)
-    
+
     bot.delete_message(message.chat.id, message.message_id)
 
 # show api keys
@@ -100,12 +100,12 @@ def show_keys(message):
 def show_balance(message):
     pass
 
-# live data button 
+# live data button
 @bot.message_handler(commands=['price'])
 def show_live_price(message):
     pass
 
-# show transaction status button 
+# show transaction status button
 @bot.message_handler(commands=['price'])
 def show_transaction_status(message):
     pass
@@ -220,7 +220,7 @@ def position_reciever(message, signal_id):
 
 
 
-# TODO give volume by percent or dollor 
+# TODO give volume by percent or dollor
 # TODO give correct number of TPs 
 # TODO start task 
 # TODO add check that a user have all api
@@ -237,8 +237,8 @@ def spot_symbol_receiver(message):
         spot = SpotSignal.objects.create(telegram_user=tel_user ,symbol_name=message.text.upper())
 
         sent = bot.reply_to(
-            message, f'Enter your entry price zone \nfor example 1000-1400\
-                 \nprice now is {live_price(message.text.upper())}')
+            message, f'Enter your entry price zone \nfor example 38000-44000\
+                 \nprice now is {live_price(message.text.upper())} \nyou have to wait ~20 second to validate your price numbers')
         bot.register_next_step_handler(sent, spot_entry_price_reciever, spot.id)
     else:
         sent = bot.send_message(message.chat.id, 'Incorrect')
@@ -253,14 +253,19 @@ def spot_entry_price_reciever(message, signal_id):
         if is_number:
             numbers_arr.append(txt)
     is_two_number = len(numbers_arr) == 2
-
     if is_two_number:
-        entry_price = EntryPrice.objects.create(min_price=numbers_arr[0], max_price=numbers_arr[1])
         spot = SpotSignal.objects.get(id=signal_id)
-        spot.entry_prices.add(entry_price)
+        number1_ = price_filter_check(spot.symbol_name, numbers_arr[0])
+        number2_ = price_filter_check(spot.symbol_name, numbers_arr[1])
 
-        sent = bot.reply_to(message, 'Enter your volume')
-        bot.register_next_step_handler(sent, spot_volume_reciever, signal_id)
+        if number1_ and number2_:
+            entry_price = EntryPrice.objects.create(min_price=numbers_arr[0], max_price=numbers_arr[1])
+            spot.entry_prices.add(entry_price)
+            sent = bot.reply_to(message, 'Enter your volume')
+            bot.register_next_step_handler(sent, spot_volume_reciever, signal_id)
+        else:
+            sent = bot.send_message(message.chat.id, "your price numbers are not in range of this symbol price")
+            bot.register_next_step_handler(message, spot_entry_price_reciever, signal_id)
     else:
         sent = bot.send_message(message.chat.id, 'please enter a number and check the correct format')
         bot.register_next_step_handler(message, spot_entry_price_reciever, signal_id)
@@ -289,15 +294,42 @@ def spot_take_profit_number_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_take_profit_number_reciever, signal_id)
 
 def spot_take_profit_reciever(message, signal_id, take_profit_number, number_position= 1):
+    print(number_position)
+    is_number, txt = int_or_float(message.text)
     if number_position < take_profit_number:
-        is_number, txt = int_or_float(message.text)
         if is_number:
-            take_profit = TakeProfit.objects.create(price=txt, level=number_position)
             spot = SpotSignal.objects.get(id=signal_id)
-            spot.take_profits.add(take_profit)
-            number_position += 1
-            sent = bot.send_message(message.chat.id, f'please enter your take profit price {number_position}:')
-            bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number, number_position)
+            price_filter = price_filter_check(spot.symbol_name, txt)
+            if price_filter:
+                take_profit = TakeProfit.objects.create(price=txt, level=number_position)
+                print(take_profit)
+                spot.take_profits.add(take_profit)
+                number_position += 1
+                sent = bot.send_message(message.chat.id, f'please enter your take profit price {number_position}:')
+                bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
+                                               number_position)
+            else:
+                sent = bot.send_message(message.chat.id, "your price number not in range of this symbol price")
+                bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
+                                               number_position)
+        else:
+            sent = bot.send_message(message.chat.id, 'please enter numbers')
+            bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
+                                           number_position)
+    elif number_position == take_profit_number:
+        if is_number:
+            spot = SpotSignal.objects.get(id=signal_id)
+            price_filter = price_filter_check(spot.symbol_name, txt)
+            if price_filter:
+                take_profit = TakeProfit.objects.create(price=txt, level=number_position)
+                print(take_profit)
+                spot.take_profits.add(take_profit)
+                sent = bot.reply_to(message, 'Enter your stop loss price')
+                bot.register_next_step_handler(sent, spot_stop_loss_reciever, signal_id)
+            else:
+                sent = bot.send_message(message.chat.id, "your price number not in range of this symbol price")
+                bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
+                                               number_position)
         else:
             sent = bot.send_message(message.chat.id, 'please enter numbers')
             bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number, number_position)
@@ -308,26 +340,46 @@ def spot_take_profit_reciever(message, signal_id, take_profit_number, number_pos
 def spot_stop_loss_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
     if is_number:
-        binance = BinanceUser.objects.get(telegram_user=message.chat.id)
         spot = SpotSignal.objects.get(id=signal_id)
-        spot.stop_loss = txt
-        spot.save()
-        spot_strategy.apply_async(
-            (binance.api_key, binance.secret_key, spot.id),
-            countdown=random.uniform(10, 15),
-            )
+        price_filter = price_filter_check(spot.symbol_name, txt)
 
-        sent = bot.reply_to(message, f'your order is submitted\n your order id is {spot.id} you can get more information \
-        by sending your order id to /orderstatus')
+        if price_filter:
+            binance = BinanceUser.objects.get(telegram_user=message.chat.id)
+            spot.stop_loss = txt
+            spot.save()
+            spot_strategy.apply_async(
+                (binance.api_key, binance.secret_key, spot.id),
+                countdown=random.uniform(10, 15),
+                )
+
+            sent = bot.reply_to(message, f'your order is submitted\n your order id is {spot.id} you can get more information \
+            by sending your order id to /orderstatus')
+        else:
+            sent = bot.send_message(message.chat.id, "your price number not in range of this symbol price")
+            bot.register_next_step_handler(sent, spot_stop_loss_reciever, signal_id)
+
     else:
         sent = bot.send_message(message.chat.id, 'please enter a number')
         bot.register_next_step_handler(message, spot_stop_loss_reciever, signal_id)
 
 
-spot_strategy.delay("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
+# spot_strategy.delay("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
 # @bot.message_handler()
 # def stock_request(message):
 #     request = message.text.split()
 #     bot.send_message(message.chat.id, message.text)
 
-bot.polling(none_stop=True)
+try:
+
+    bot.polling(none_stop=True)
+
+    # ConnectionError and ReadTimeout because of possible timout of the requests library
+
+    # TypeError for moviepy errors
+
+    # maybe there are others, therefore Exception
+
+except Exception as e:
+    bot.polling(none_stop=True)
+
+    time.sleep(15)
