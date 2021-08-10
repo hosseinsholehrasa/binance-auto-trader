@@ -11,9 +11,9 @@ import random
 from traderbot import settings
 from signals.models import FutureSignal, SpotSignal, EntryPrice, TakeProfit
 from users.models import BinanceUser, TelegramUser
-from signals.tasks import intialize_symbol_name, live_price, spot_strategy, price_filter_check
+from signals.tasks import intialize_symbol_name, live_price, spot_strategy, price_filter_check, \
+    volume_checker
 
-# TODO show live data 
 # TODO transaction request status
 # TODO ramz kardan key ha
 
@@ -221,8 +221,6 @@ def position_reciever(message, signal_id):
 
 
 # TODO give volume by percent or dollor
-# TODO give correct number of TPs 
-# TODO start task 
 # TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
 
@@ -275,11 +273,16 @@ def spot_volume_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
     if is_number:
         spot = SpotSignal.objects.get(id=signal_id)
-        spot.volume = txt
-        spot.save()
-        # TODO will get numbers of take profits
-        sent = bot.reply_to(message, 'Enter your take profit numbers \nfor now just accept 3')
-        bot.register_next_step_handler(sent, spot_take_profit_number_reciever, signal_id)
+        volume_pass = volume_checker(txt, spot.symbol_name)
+        if volume_pass:
+            spot.volume = txt
+            spot.save()
+            # TODO will get numbers of take profits
+            sent = bot.reply_to(message, 'Enter your take profit numbers \nfor now just accept 3')
+            bot.register_next_step_handler(sent, spot_take_profit_number_reciever, signal_id)
+        else:
+            sent = bot.send_message(message.chat.id, 'you dont have enough money to start signal \nminimum need 120$')
+            bot.register_next_step_handler(message, spot_volume_reciever, signal_id)
     else:
         sent = bot.send_message(message.chat.id, 'please enter a number')
         bot.register_next_step_handler(message, spot_volume_reciever, signal_id)
@@ -373,13 +376,6 @@ try:
 
     bot.polling(none_stop=True)
 
-    # ConnectionError and ReadTimeout because of possible timout of the requests library
-
-    # TypeError for moviepy errors
-
-    # maybe there are others, therefore Exception
-
 except Exception as e:
-    bot.polling(none_stop=True)
-
     time.sleep(15)
+    bot.polling(none_stop=True)

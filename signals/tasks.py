@@ -58,6 +58,7 @@ stp4_spot = 40/100
 stp5_spot = 40/100
 stp6_spot = 20/100
 slp_pr_ordr = 1.5
+min_signal_price = 110 # dollor
 
 # main
 def live_price(symb):
@@ -68,6 +69,19 @@ def live_price(symb):
     else:
         return "wrong symbol name"
 
+def volume_checker(volume, symbol):
+    client = Client(apikey, secretkey)
+    info = client.get_symbol_info(symbol)
+    balance = client.get_asset_balance(info['quoteAsset'])
+    if float(balance['free']) < volume:
+        return False
+    usd_volume = volume
+    if not info['quoteAsset'] in ["USDT", "BUSD", "USDC"]:
+        price = live_price(f"{info['quoteAsset']}USDT")
+        usd_volume = price * volume
+    if usd_volume < min_signal_price:
+        return False
+    return True
 
 def round_decimals_down(number:float, decimals:int=6):
     """
