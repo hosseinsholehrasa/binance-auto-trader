@@ -309,7 +309,8 @@ def spot_volume_reciever(message, signal_id):
 def spot_take_profit_number_reciever(message, signal_id):
     if message.text.isdigit():
         take_profit_number=3
-        sent = bot.send_message(message.chat.id, 'please enter your take profit price 1:')
+        sent = bot.send_message(message.chat.id, 'please enter your take profit price 1:\n'
+                                                 'you have to wait ~20 second to validate your price numbers')
         bot.register_next_step_handler(sent, spot_take_profit_reciever, signal_id, take_profit_number)
     else:
         sent = bot.send_message(message.chat.id, 'please enter a number')
@@ -327,7 +328,8 @@ def spot_take_profit_reciever(message, signal_id, take_profit_number, number_pos
                 print(take_profit)
                 spot.take_profits.add(take_profit)
                 number_position += 1
-                sent = bot.send_message(message.chat.id, f'please enter your take profit price {number_position}:')
+                sent = bot.send_message(message.chat.id, f'please enter your take profit price {number_position}:\n'
+                                                         f'you have to wait ~20 second to validate your price numbers')
                 bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
                                                number_position)
             else:
@@ -391,10 +393,33 @@ def spot_stop_loss_reciever(message, signal_id):
 #     request = message.text.split()
 #     bot.send_message(message.chat.id, message.text)
 
-try:
+@bot.message_handler(commands=['orderstatus'])
+def spot_order_status(message):
+    sent = bot.reply_to(message, "Enter your spot signal id ")
+    bot.register_next_step_handler(sent, spot_order_status_check)
 
+
+def spot_order_status_check(message):
+
+    spot = SpotSignal.objects.filter(telegram_user=message.chat.id, id=message.text)
+    if spot:
+        spot = spot[0]
+        tp1, tp2, tp3 = spot.take_profits.all().order_by("level")
+        entry_price = spot.entry_prices.all()[0]
+        sent = bot.reply_to(message,
+                            f"symbol: {spot.symbol_name} \nmin entry price: {entry_price.max_price}\n"
+                            f"max entry price: {entry_price.min_price} \nvolume: {spot.volume} \n"
+                            f"take profites-> tp1:{tp1.price} - tp2:{tp2.price} - tp3:{tp3.price} \n"
+                            f"stop loss: {spot.stop_loss}\n"
+                            f"  ")
+    else:
+        sent = bot.reply_to(message, "You dont have access to this order or not found")
+
+
+try:
     bot.polling(none_stop=True)
 
 except Exception as e:
+    print(e.message)
     time.sleep(15)
     bot.polling(none_stop=True)

@@ -121,7 +121,6 @@ def price_filter_check(symbol, amount):
     info = client.get_symbol_info(symbol)
     price = live_price(symbol)
     for filter in info["filters"]:
-        print("g", filter)
         if filter['filterType'] == "PERCENT_PRICE":
             if not price * float(filter['multiplierDown'])  <= amount <= price * float(filter['multiplierUp']):
                 return False
