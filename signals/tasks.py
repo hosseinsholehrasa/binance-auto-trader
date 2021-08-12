@@ -643,6 +643,10 @@ def spot_strategy(apikey, secretkey, signal_id):
             tick_size = float(filter['tickSize'])
 
     mid_price = (entry_price.max_price + entry_price.min_price) / 2 
+    binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrderException,
+                          BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException,
+                          BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
+
 
     if entry_price.max_price < price:
         try:
@@ -664,8 +668,14 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=1,
                 type="LIMIT"
             )
-            time.sleep(slp_pr_ordr)
-            # ORDER 2 -  LIMIT order    
+        except binance_exceptions as e:
+            print(e)
+            print(repr(e))
+            print(e.message)
+
+        time.sleep(slp_pr_ordr)
+        try:
+            # ORDER 2 -  LIMIT order
             limit_order2 = client.order_limit_buy(
                 symbol=symbol,
                 quantity=round_decimals_down(stp2_spot * volume / mid_price),
@@ -683,7 +693,13 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=2,
                 type="LIMIT"
             )
-            time.sleep(slp_pr_ordr)
+        except binance_exceptions as e:
+            print(e)
+            print(repr(e))
+            print(e.message)
+
+        time.sleep(slp_pr_ordr)
+        try:
             # ORDER 3 -  LIMIT order 
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
@@ -702,30 +718,19 @@ def spot_strategy(apikey, secretkey, signal_id):
                 type="LIMIT"
             )
             print("limit order3 halat aval:", limit_order3)
+        except binance_exceptions as e:
+            print(e)
+            print(repr(e))
+            print(e.message)
 
-            # create spot controller
-            spot_controller = SpotControler.objects.create(spot_signal=signal)
-            spot_controller.first_orders.add(order1, order2, order3)
-            spot_controller_checker.apply_async(
-                (apikey, secretkey, spot_controller.id),
-                countdown=random.uniform(10, 15),
-            )
-        except BinanceRequestException as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except BinanceAPIException as e: 
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except (BinanceOrderException, BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException) as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except (BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException) as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
+        # create spot controller
+        spot_controller = SpotControler.objects.create(spot_signal=signal)
+        spot_controller.first_orders.add(order1, order2, order3)
+        spot_controller_checker.apply_async(
+            (apikey, secretkey, spot_controller.id),
+            countdown=random.uniform(10, 15),
+        )
+
     else:
         try:         
             # jabejayii noghte hadaksar
@@ -747,7 +752,13 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=1,
                 type="MARKET"
             )
-            time.sleep(slp_pr_ordr)
+        except binance_exceptions as e:
+            print(e)
+            print(repr(e))
+            print(e.message)
+
+        time.sleep(slp_pr_ordr)
+        try:
             # ORDER 2 -  LIMIT order 
             mid_price = (entry_price.max_price + entry_price.min_price) / 2
             limit_order2 = client.order_limit_buy(
@@ -767,8 +778,14 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=2,
                 type="LIMIT"
             )
-            time.sleep(slp_pr_ordr)
-            # ORDER 3 -  LIMIT order 
+        except binance_exceptions as e:
+            print(e)
+            print(repr(e))
+            print(e.message)
+
+        time.sleep(slp_pr_ordr)
+        try:
+            # ORDER 3 -  LIMIT order
             limit_order3 = client.order_limit_buy(
                 symbol=symbol,
                 quantity=round_decimals_down(stp3_spot * volume / entry_price.min_price),
@@ -786,33 +803,19 @@ def spot_strategy(apikey, secretkey, signal_id):
                 priority=3,
                 type="LIMIT"
             )
-
-            # create spot controller
-            spot_controller = SpotControler.objects.create(spot_signal=signal)
-            spot_controller.first_orders.add(order1, order2, order3)
-
-            spot_controller_checker.apply_async(
-                (apikey, secretkey, spot_controller.id),
-                countdown=random.uniform(10, 15),
-            )
-        except BinanceRequestException as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except BinanceAPIException as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except (BinanceOrderException, BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException) as e:
-            print(e)
-            print(repr(e))
-            print(e.message)
-        except (BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException) as e:
+        except binance_exceptions as e:
             print(e)
             print(repr(e))
             print(e.message)
 
+        # create spot controller
+        spot_controller = SpotControler.objects.create(spot_signal=signal)
+        spot_controller.first_orders.add(order1, order2, order3)
 
+        spot_controller_checker.apply_async(
+            (apikey, secretkey, spot_controller.id),
+            countdown=random.uniform(10, 15),
+        )
 
 
 # spot_strategy(apikey, secretkey, "BTCUSDT", 41000, 100)
