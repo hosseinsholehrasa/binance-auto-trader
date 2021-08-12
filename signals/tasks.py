@@ -44,7 +44,7 @@ from traderbot.celery import app
 secretkey = "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv"
 apikey = "ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT"
 
-# initialization 
+# initialization
 def intialize_symbol_name():
     client = Client(apikey, secretkey)
     all_tackers_name = client.get_all_tickers()
@@ -159,55 +159,72 @@ def cancel_oco_orders(client, *args):
             order.status = client.ORDER_STATUS_CANCELED
             order.save()
 
-    
+
 # in OCO sell price is tp and limit and stop is stop loss
 # limit maker hamoon tp 
 @app.task
 def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=True, second_stage=False):
     print(f"first stage: {first_stage},second stage: {second_stage}")
     # INITIALIZATION
-    client = Client(apikey, secretkey)
-    spot_controller = SpotControler.objects.get(id=spot_controller_id)
-    spot_signal = spot_controller.spot_signal
-    # price = live_price(spot_controller.spot_signal.symbol_name)
-    symbol = spot_controller.spot_signal.symbol_name
-    tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
-    sl = spot_controller.spot_signal.stop_loss
-    entry_price =  spot_controller.spot_signal.entry_prices.all()[0]
-    tick_size = 0.1
-    for filter in client.get_symbol_info(symbol)["filters"]:
-        if filter['filterType'] == "PRICE_FILTER":
-            tick_size = float(filter['tickSize'])
+    try:
+        client = Client(apikey, secretkey)
+        spot_controller = SpotControler.objects.get(id=spot_controller_id)
+        spot_signal = spot_controller.spot_signal
+        # price = live_price(spot_controller.spot_signal.symbol_name)
+        symbol = spot_controller.spot_signal.symbol_name
+        tp1, tp2 , tp3 = spot_controller.spot_signal.take_profits.all().order_by("level")
+        sl = spot_controller.spot_signal.stop_loss
+        entry_price =  spot_controller.spot_signal.entry_prices.all()[0]
+        tick_size = 0.1
+        for filter in client.get_symbol_info(symbol)["filters"]:
+            if filter['filterType'] == "PRICE_FILTER":
+                tick_size = float(filter['tickSize'])
 
-    mid_price = (entry_price.max_price + entry_price.min_price) / 2
-    
+        mid_price = (entry_price.max_price + entry_price.min_price) / 2
+    except Exception as e:
+        print(e.message)
+        return 0
+
     ###################### SECOND STAGE #####################  
     if second_stage:
-        order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
-        order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-        print(f"order4 second stage next level: {order4.isin_next_level},status: {order4.status}")
-        print(f"order5 second stage next level: {order5.isin_next_level},status: {order5.status}")
+        try:
+            order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
+            order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
+            print(f"order4 second stage next level: {order4.isin_next_level},status: {order4.status}")
+            print(f"order5 second stage next level: {order5.isin_next_level},status: {order5.status}")
+        except Exception as e:
+            print(e.message)
 
         # mesle payiini faghat order haye oonvaro bayad cancell kone 
-        if order4.isin_next_level == False:
+        if not order4.isin_next_level:
             if order4.status == client.ORDER_STATUS_FILLED:
                 order4.isin_next_level = True
                 order4.save()
-                first_stage = False 
+                first_stage = False
 
                 # check limit orders that not filled to cancel it
                 # cancel order 2 va 3
                 if not order2.status == client.ORDER_STATUS_FILLED:
-                    client.cancel_order(symbol=symbol, orderId=order2.id)
-                    order2.status = client.ORDER_STATUS_CANCELED
-                    order2.save() 
+                    try:
+                        client.cancel_order(symbol=symbol, orderId=order2.id)
+                        order2.status = client.ORDER_STATUS_CANCELED
+                        order2.save()
+                    except binance_exceptions as e:
+                        print(e)
+                        print(repr(e))
+                        print(e.message)
+
                 if not order3.status == client.ORDER_STATUS_FILLED:
-                    client.cancel_order(symbol=symbol, orderId=order3.id)
-                    order3.status = client.ORDER_STATUS_CANCELED
-                    order3.save()
+                    try:
+                        client.cancel_order(symbol=symbol, orderId=order3.id)
+                        order3.status = client.ORDER_STATUS_CANCELED
+                        order3.save()
+                    except binance_exceptions as e:
+                        print(e)
+                        print(repr(e))
+                        print(e.message)
 
-
-                # cancel oco orders 
+                # cancel oco orders
                 cancel_oco_orders(client, order5, order6)
                 # remove oco orders
                 spot_controller.second_orders.remove(order5, order6)
@@ -216,73 +233,91 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 order5_volume = order5.volume
                 order6_volume = order6.volume
 
-                # order5 - order OCOs changes
-                OCO_order5 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(order5_volume),
-                    price=price_calculator(tp2.price, tick_size),
-                    stopPrice=price_calculator(((1/100*mid_price) + mid_price), tick_size),
-                    stopLimitPrice=price_calculator(mid_price, tick_size),
-                    stopLimitTimeInForce="GTC"
+                try:
+                    # order5 - order OCOs changes
+                    OCO_order5 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(order5_volume),
+                        price=price_calculator(tp2.price, tick_size),
+                        stopPrice=price_calculator(((1/100*mid_price) + mid_price), tick_size),
+                        stopLimitPrice=price_calculator(mid_price, tick_size),
+                        stopLimitTimeInForce="GTC"
+                        )
+                    order5 = SpotOrder.objects.create(
+                        order_id=OCO_order5["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp2.price, tick_size),
+                        take_profit=price_calculator(tp2.price, tick_size),
+                        stop_loss=price_calculator(mid_price, tick_size),
+                        volume=round_decimals_down(order5_volume),
+                        side="SELL",
+                        priority=2,
+                        type="OCO"
                     )
-                order5 = SpotOrder.objects.create(
-                    order_id=OCO_order5["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp2.price, tick_size),
-                    take_profit=price_calculator(tp2.price, tick_size),
-                    stop_loss=price_calculator(mid_price, tick_size),
-                    volume=round_decimals_down(order5_volume),
-                    side="SELL",
-                    priority=2,
-                    type="OCO"
-                )   
-                time.sleep(slp_pr_ordr)            
-                # order6 - order OCOs updates
-                OCO_order6 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(order6_volume),
-                    price=price_calculator(tp3.price, tick_size),
-                    stopPrice=price_calculator(((1/100*mid_price) + mid_price), tick_size),
-                    stopLimitPrice=price_calculator(mid_price, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order6 = SpotOrder.objects.create(
-                    order_id=OCO_order6["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp3.price, tick_size),
-                    take_profit=price_calculator(tp3.price, tick_size),
-                    stop_loss=price_calculator(mid_price, tick_size),
-                    volume=round_decimals_down(order6_volume),
-                    side="SELL",
-                    priority=3,
-                    type="OCO"
-                )  
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order6 - order OCOs updates
+                    OCO_order6 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(order6_volume),
+                        price=price_calculator(tp3.price, tick_size),
+                        stopPrice=price_calculator(((1/100*mid_price) + mid_price), tick_size),
+                        stopLimitPrice=price_calculator(mid_price, tick_size),
+                        stopLimitTimeInForce="GTC"
+                    )
+                    order6 = SpotOrder.objects.create(
+                        order_id=OCO_order6["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp3.price, tick_size),
+                        take_profit=price_calculator(tp3.price, tick_size),
+                        stop_loss=price_calculator(mid_price, tick_size),
+                        volume=round_decimals_down(order6_volume),
+                        side="SELL",
+                        priority=3,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
                 spot_controller.second_orders.add(order5, order6)
 
             else:
-                # get order status
-                order4_response = get_oco_order(client, order4.order_id)
-                if order4_response['listOrderStatus'] == "ALL_DONE":
-                    order4_1 = client.get_order(symbol=order4.symbol_name, orderId=order4_response["orders"][0]["orderId"])
-                    # we reached first take profit
-                    if order4_1["status"] == client.ORDER_STATUS_FILLED and order4_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
-                        order4.status = client.ORDER_STATUS_FILLED
-                        order4.save()
-                    # stop loss triglled
-                    else:
-                        order4.status = client.ORDER_STATUS_CANCELED
-                        order4.price = sl
-                        order4.save()
-                        order5.status = client.ORDER_STATUS_CANCELED
-                        order5.price = sl
-                        order5.save()
-                        order6.status = client.ORDER_STATUS_CANCELED
-                        order6.price = sl
-                        order6.save()
-                        return 0    
+                try:
+                    # get order status
+                    order4_response = get_oco_order(client, order4.order_id)
+                    if order4_response['listOrderStatus'] == "ALL_DONE":
+                        order4_1 = client.get_order(symbol=order4.symbol_name,
+                                                    orderId=order4_response["orders"][0]["orderId"])
+                        # we reached first take profit
+                        if order4_1["status"] == client.ORDER_STATUS_FILLED and \
+                                order4_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
+                            order4.status = client.ORDER_STATUS_FILLED
+                            order4.save()
+                        # stop loss triglled
+                        else:
+                            order4.status = client.ORDER_STATUS_CANCELED
+                            order4.price = sl
+                            order4.save()
+                            order5.status = client.ORDER_STATUS_CANCELED
+                            order5.price = sl
+                            order5.save()
+                            order6.status = client.ORDER_STATUS_CANCELED
+                            order6.price = sl
+                            order6.save()
+                            return 0
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
         elif order5.isin_next_level == False:
             if order5.status == client.ORDER_STATUS_FILLED:
@@ -295,52 +330,63 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
                 spot_controller.second_orders.remove(order6)
 
                 order6_volume = order6.volume
-           
-                # order6 - order OCOs changes
-                OCO_order6 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(order6_volume),
-                    price=price_calculator(tp3.price, tick_size),
-                    stopPrice=price_calculator(((1/100*tp1.price) + tp1.price), tick_size),
-                    stopLimitPrice=price_calculator(tp1.price, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order6 = SpotOrder.objects.create(
-                    order_id=OCO_order6["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp3.price, tick_size),
-                    take_profit=price_calculator(tp3.price, tick_size),
-                    stop_loss=price_calculator(tp1.price, tick_size),
-                    volume=round_decimals_down(order6_volume),
-                    side="SELL",
-                    priority=3,
-                    type="OCO"
-                )  
+
+                try:
+                    # order6 - order OCOs changes
+                    OCO_order6 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(order6_volume),
+                        price=price_calculator(tp3.price, tick_size),
+                        stopPrice=price_calculator(((1/100*tp1.price) + tp1.price), tick_size),
+                        stopLimitPrice=price_calculator(tp1.price, tick_size),
+                        stopLimitTimeInForce="GTC"
+                    )
+                    order6 = SpotOrder.objects.create(
+                        order_id=OCO_order6["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp3.price, tick_size),
+                        take_profit=price_calculator(tp3.price, tick_size),
+                        stop_loss=price_calculator(tp1.price, tick_size),
+                        volume=round_decimals_down(order6_volume),
+                        side="SELL",
+                        priority=3,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
                 spot_controller.second_orders.add(order6)
 
             else:
-                # get order status
-                order5_response = get_oco_order(client, order5.order_id)
-                if order5_response['listOrderStatus'] == "ALL_DONE":
-                    order5_1 = client.get_order(symbol=symbol, orderId=order5_response["orders"][0]["orderId"])
-                    # we get first take profit
-                    if order5_1["status"] == client.ORDER_STATUS_FILLED and order5_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
-                        order5.status = client.ORDER_STATUS_FILLED
-                        order5.save()
-                        # read bellow description
-                        order6.status = client.ORDER_STATUS_FILLED
-                        order6.save()
-                    # stop loss triglled
-                    else:
-                        order5.status = client.ORDER_STATUS_CANCELED
-                        order5.price = mid_price
-                        order5.save()
-                        order6.status = client.ORDER_STATUS_CANCELED
-                        order6.price = mid_price
-                        order6.save()
-                        return 0    
+                try:
+                    # get order status
+                    order5_response = get_oco_order(client, order5.order_id)
+                    if order5_response['listOrderStatus'] == "ALL_DONE":
+                        order5_1 = client.get_order(symbol=symbol, orderId=order5_response["orders"][0]["orderId"])
+                        # we get first take profit
+                        if order5_1["status"] == client.ORDER_STATUS_FILLED and order5_1["type"] == client.ORDER_TYPE_LIMIT_MAKER:
+                            order5.status = client.ORDER_STATUS_FILLED
+                            order5.save()
+                            # read bellow description
+                            order6.status = client.ORDER_STATUS_FILLED
+                            order6.save()
+                        # stop loss triglled
+                        else:
+                            order5.status = client.ORDER_STATUS_CANCELED
+                            order5.price = mid_price
+                            order5.save()
+                            order6.status = client.ORDER_STATUS_CANCELED
+                            order6.price = mid_price
+                            order6.save()
+                            return 0
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
         # TODO we can track the order6 but not neccessery for now just get it filled
         else:
             return 0
@@ -349,279 +395,350 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
 
     ###################### FIRST STAGE #####################
     if first_stage:
-        order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
+        try:
+            order1, order2, order3 = spot_controller.first_orders.all().order_by("priority")
+        except:
+            pass
 
         print(f"order1 first stage next level: {order1.isin_next_level},status: {order1.status}")
         print(f"order2 first stage next level: {order2.isin_next_level},status: {order2.status}")
         print(f"order3 first stage next level: {order3.isin_next_level},status: {order3.status}")
 
         # OCO1 gozashte shode? are pas boro baadi age na bebin filled shode ya na? age na check kon status age are pas bezar
-        if order1.isin_next_level == False:
+        if not order1.isin_next_level:
             if order1.status == client.ORDER_STATUS_FILLED:
-
-                # order4 - order OCO for order 1
-                OCO_order4 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp4_spot * order1.volume),
-                    price=price_calculator(tp1.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order4 = SpotOrder.objects.create(
-                    order_id=OCO_order4["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp1.price, tick_size),
-                    take_profit=price_calculator(tp1.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp4_spot * order1.volume),
-                    side="SELL",
-                    priority=1,
-                    type="OCO"
-                )
-                print(OCO_order4)
-                time.sleep(slp_pr_ordr)
-                # order5 - order OCO for order 1
-                OCO_order5 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp5_spot * order1.volume),
-                    price=price_calculator(tp2.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
+                try:
+                    # order4 - order OCO for order 1
+                    OCO_order4 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp4_spot * order1.volume),
+                        price=price_calculator(tp1.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
                     )
-                order5 = SpotOrder.objects.create(
-                    order_id=OCO_order5["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp2.price, tick_size),
-                    take_profit=price_calculator(tp2.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp5_spot * order1.volume),
-                    side="SELL",
-                    priority=2,
-                    type="OCO"
-                )
+                    order4 = SpotOrder.objects.create(
+                        order_id=OCO_order4["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp1.price, tick_size),
+                        take_profit=price_calculator(tp1.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp4_spot * order1.volume),
+                        side="SELL",
+                        priority=1,
+                        type="OCO"
+                    )
+                    print(OCO_order4)
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
-                print(OCO_order5)
-                print(price_calculator(tp3.price, tick_size))
-                print(order1.volume)
-                print(round_decimals_down(stp6_spot * order1.volume))
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order5 - order OCO for order 1
+                    OCO_order5 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp5_spot * order1.volume),
+                        price=price_calculator(tp2.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                        )
+                    order5 = SpotOrder.objects.create(
+                        order_id=OCO_order5["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp2.price, tick_size),
+                        take_profit=price_calculator(tp2.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp5_spot * order1.volume),
+                        side="SELL",
+                        priority=2,
+                        type="OCO"
+                    )
 
-                time.sleep(slp_pr_ordr)               
-                # order6 - order OCO for order 1
-                OCO_order6 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp6_spot * order1.volume),
-                    price=price_calculator(tp3.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order6 = SpotOrder.objects.create(
-                    order_id=OCO_order6["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp3.price, tick_size),
-                    take_profit=price_calculator(tp3.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp6_spot * order1.volume),
-                    side="SELL",
-                    priority=3,
-                    type="OCO"
-                )               
-                print(OCO_order6)
-                
+                    print(OCO_order5)
+                    print(price_calculator(tp3.price, tick_size))
+                    print(order1.volume)
+                    print(round_decimals_down(stp6_spot * order1.volume))
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order6 - order OCO for order 1
+                    OCO_order6 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp6_spot * order1.volume),
+                        price=price_calculator(tp3.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                    )
+                    order6 = SpotOrder.objects.create(
+                        order_id=OCO_order6["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp3.price, tick_size),
+                        take_profit=price_calculator(tp3.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp6_spot * order1.volume),
+                        side="SELL",
+                        priority=3,
+                        type="OCO"
+                    )
+                    print(OCO_order6)
+
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
                 spot_controller.second_orders.add(order4, order5, order6)
                 # time to check OCOs
-                second_stage = True 
+                second_stage = True
                 order1.isin_next_level = True
                 order1.save()
 
             else:
                 # get order status
-                order = client.get_order(symbol=symbol, orderId=order1.order_id)
-                if order["status"] == client.ORDER_STATUS_FILLED:
-                    order1.status = client.ORDER_STATUS_FILLED
-                    print("order1 status filled")
-                    order1.save()
+                try:
+                    order = client.get_order(symbol=symbol, orderId=order1.order_id)
+                    if order["status"] == client.ORDER_STATUS_FILLED:
+                        order1.status = client.ORDER_STATUS_FILLED
+                        print("order1 status filled")
+                        order1.save()
 
-        elif order2.isin_next_level == False:
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
+        elif not order2.isin_next_level:
             if order2.status == client.ORDER_STATUS_FILLED:
-                order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-                
+                try:
+                    order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
+                except:
+                    pass
+
                 # cancel 3 oco order
                 cancel_oco_orders(client, order4, order5, order6)
                 # remove last 3 orders
                 spot_controller.second_orders.remove(order4, order5, order6)
-
-                # order4 - order OCO for order 2
-                OCO_order4 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp4_spot * (order1.volume + order2.volume)),
-                    price=price_calculator(tp1.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order4 = SpotOrder.objects.create(
-                    order_id=OCO_order4["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp1.price, tick_size),
-                    take_profit=price_calculator(tp1.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp4_spot * (order1.volume + order2.volume)),
-                    side="SELL",
-                    priority=1,
-                    type="OCO"
-                )
-                time.sleep(slp_pr_ordr)
-                # order5 - order OCO for order 2
-                OCO_order5 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp5_spot * (order1.volume + order2.volume)),
-                    price=price_calculator(tp2.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
+                try:
+                    # order4 - order OCO for order 2
+                    OCO_order4 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp4_spot * (order1.volume + order2.volume)),
+                        price=price_calculator(tp1.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
                     )
-                order5 = SpotOrder.objects.create(
-                    order_id=OCO_order5["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp2.price, tick_size),
-                    take_profit=price_calculator(tp2.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp5_spot * (order1.volume + order2.volume)),
-                    side="SELL",
-                    priority=2,
-                    type="OCO"
-                )     
-                time.sleep(slp_pr_ordr)          
-                # order6 - order OCO for order 2
-                OCO_order6 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp6_spot * (order1.volume + order2.volume)),
-                    price=price_calculator(tp3.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order6 = SpotOrder.objects.create(
-                    order_id=OCO_order6["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp3.price, tick_size),
-                    take_profit=price_calculator(tp3.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp6_spot * (order1.volume + order2.volume)),
-                    side="SELL",
-                    priority=3,
-                    type="OCO"
-                )  
+                    order4 = SpotOrder.objects.create(
+                        order_id=OCO_order4["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp1.price, tick_size),
+                        take_profit=price_calculator(tp1.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp4_spot * (order1.volume + order2.volume)),
+                        side="SELL",
+                        priority=1,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order5 - order OCO for order 2
+                    OCO_order5 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp5_spot * (order1.volume + order2.volume)),
+                        price=price_calculator(tp2.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                        )
+                    order5 = SpotOrder.objects.create(
+                        order_id=OCO_order5["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp2.price, tick_size),
+                        take_profit=price_calculator(tp2.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp5_spot * (order1.volume + order2.volume)),
+                        side="SELL",
+                        priority=2,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order6 - order OCO for order 2
+                    OCO_order6 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp6_spot * (order1.volume + order2.volume)),
+                        price=price_calculator(tp3.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                    )
+                    order6 = SpotOrder.objects.create(
+                        order_id=OCO_order6["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp3.price, tick_size),
+                        take_profit=price_calculator(tp3.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp6_spot * (order1.volume + order2.volume)),
+                        side="SELL",
+                        priority=3,
+                        type="OCO"
+                    )
+
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
                 spot_controller.second_orders.add(order4, order5, order6)
                 order2.isin_next_level = True
                 order2.save()
             else:
-                # get order status
-                order = client.get_order(symbol=symbol, orderId=order2.order_id)
-                if order["status"] == client.ORDER_STATUS_FILLED:
-                    order2.status = client.ORDER_STATUS_FILLED
-                    order2.save()
+                try:
+                    # get order status
+                    order = client.get_order(symbol=symbol, orderId=order2.order_id)
+                    if order["status"] == client.ORDER_STATUS_FILLED:
+                        order2.status = client.ORDER_STATUS_FILLED
+                        order2.save()
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
-        elif order3.isin_next_level == False:
-
+        elif not order3.isin_next_level:
             if order3.status == client.ORDER_STATUS_FILLED:
-                order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
-                
+                try:
+                    order4, order5, order6 = spot_controller.second_orders.all().order_by("priority")
+                except:
+                    pass
+
                 # cancel 3 oco order
                 cancel_oco_orders(client, order4, order5, order6)
                 # remove last 3 orders
                 spot_controller.second_orders.remove(order4, order5, order6)
-
-                # order4 - order OCO for order 3
-                OCO_order4 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp4_spot * (order1.volume + order2.volume + order3.volume)),
-                    price=price_calculator(tp1.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order4 = SpotOrder.objects.create(
-                    order_id=OCO_order4["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp1.price, tick_size),
-                    take_profit=price_calculator(tp1.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp4_spot * (order1.volume + order2.volume + order3.volume)),
-                    side="SELL",
-                    priority=1,
-                    type="OCO"
-                )
-                time.sleep(slp_pr_ordr)
-                # order5 - order OCO for order 3
-                OCO_order5 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp5_spot * (order1.volume + order2.volume + order3.volume)),
-                    price=price_calculator(tp2.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
+                try:
+                    # order4 - order OCO for order 3
+                    OCO_order4 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp4_spot * (order1.volume + order2.volume + order3.volume)),
+                        price=price_calculator(tp1.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
                     )
-                order5 = SpotOrder.objects.create(
-                    order_id=OCO_order5["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp2.price, tick_size),
-                    take_profit=price_calculator(tp2.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp5_spot * (order1.volume + order2.volume + order3.volume)),
-                    side="SELL",
-                    priority=2,
-                    type="OCO"
-                )    
-                time.sleep(slp_pr_ordr)           
-                # order6 - order OCO for order 3
-                OCO_order6 = client.order_oco_sell(
-                    symbol=symbol,
-                    quantity=round_decimals_down(stp6_spot * (order1.volume + order2.volume + order3.volume)),
-                    price=price_calculator(tp3.price, tick_size),
-                    stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
-                    stopLimitPrice=price_calculator(sl, tick_size),
-                    stopLimitTimeInForce="GTC"
-                )
-                order6 = SpotOrder.objects.create(
-                    order_id=OCO_order6["orderListId"],
-                    spot_signal=spot_signal,
-                    symbol_name=symbol,
-                    price=price_calculator(tp3.price, tick_size),
-                    take_profit=price_calculator(tp3.price, tick_size),
-                    stop_loss=price_calculator(sl, tick_size),
-                    volume=round_decimals_down(stp6_spot * (order1.volume + order2.volume + order3.volume)),
-                    side="SELL",
-                    priority=3,
-                    type="OCO"
-                )
+                    order4 = SpotOrder.objects.create(
+                        order_id=OCO_order4["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp1.price, tick_size),
+                        take_profit=price_calculator(tp1.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp4_spot * (order1.volume + order2.volume + order3.volume)),
+                        side="SELL",
+                        priority=1,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order5 - order OCO for order 3
+                    OCO_order5 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp5_spot * (order1.volume + order2.volume + order3.volume)),
+                        price=price_calculator(tp2.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                        )
+                    order5 = SpotOrder.objects.create(
+                        order_id=OCO_order5["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp2.price, tick_size),
+                        take_profit=price_calculator(tp2.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp5_spot * (order1.volume + order2.volume + order3.volume)),
+                        side="SELL",
+                        priority=2,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
+
+                time.sleep(slp_pr_ordr)
+                try:
+                    # order6 - order OCO for order 3
+                    OCO_order6 = client.order_oco_sell(
+                        symbol=symbol,
+                        quantity=round_decimals_down(stp6_spot * (order1.volume + order2.volume + order3.volume)),
+                        price=price_calculator(tp3.price, tick_size),
+                        stopPrice=price_calculator(((1/100*sl) + sl), tick_size),
+                        stopLimitPrice=price_calculator(sl, tick_size),
+                        stopLimitTimeInForce="GTC"
+                    )
+                    order6 = SpotOrder.objects.create(
+                        order_id=OCO_order6["orderListId"],
+                        spot_signal=spot_signal,
+                        symbol_name=symbol,
+                        price=price_calculator(tp3.price, tick_size),
+                        take_profit=price_calculator(tp3.price, tick_size),
+                        stop_loss=price_calculator(sl, tick_size),
+                        volume=round_decimals_down(stp6_spot * (order1.volume + order2.volume + order3.volume)),
+                        side="SELL",
+                        priority=3,
+                        type="OCO"
+                    )
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
                 spot_controller.second_orders.add(order4, order5, order6)
 
                 first_stage = False
-                second_stage = True 
+                second_stage = True
                 order3.isin_next_level = True
                 order3.save()
             else:
-                # get order status
-                order = client.get_order(symbol=symbol, orderId=order3.order_id)
-                if order["status"] == client.ORDER_STATUS_FILLED:
-                    order3.status = client.ORDER_STATUS_FILLED
-                    order3.save()
-
+                try:
+                    # get order status
+                    order = client.get_order(symbol=symbol, orderId=order3.order_id)
+                    if order["status"] == client.ORDER_STATUS_FILLED:
+                        order3.status = client.ORDER_STATUS_FILLED
+                        order3.save()
+                except binance_exceptions as e:
+                    print(e)
+                    print(repr(e))
+                    print(e.message)
 
     spot_controller_checker.apply_async(
         (apikey, secretkey, spot_controller.id, first_stage, second_stage),
@@ -632,21 +749,24 @@ def spot_controller_checker(apikey, secretkey, spot_controller_id, first_stage=T
 def spot_strategy(apikey, secretkey, signal_id):
     client = Client(apikey, secretkey)
     # initalized
-    signal = SpotSignal.objects.get(id=signal_id)
-    symbol = signal.symbol_name
-    entry_price = signal.entry_prices.all()[0]
-    price = live_price(symbol)
-    volume = signal.volume
-    tick_size = 0.1
-    for filter in client.get_symbol_info(symbol)["filters"]:
-        if filter['filterType'] == "PRICE_FILTER":
-            tick_size = float(filter['tickSize'])
+    try:
+        signal = SpotSignal.objects.get(id=signal_id)
+        symbol = signal.symbol_name
+        entry_price = signal.entry_prices.all()[0]
+        price = live_price(symbol)
+        volume = signal.volume
+        tick_size = 0.1
+        for filter in client.get_symbol_info(symbol)["filters"]:
+            if filter['filterType'] == "PRICE_FILTER":
+                tick_size = float(filter['tickSize'])
 
-    mid_price = (entry_price.max_price + entry_price.min_price) / 2 
-    binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrderException,
-                          BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException,
-                          BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
-
+        mid_price = (entry_price.max_price + entry_price.min_price) / 2
+        binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrderException,
+                              BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException,
+                              BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
+    except Exception as e:
+        print(e.message)
+        return 0
 
     if entry_price.max_price < price:
         try:
@@ -732,7 +852,7 @@ def spot_strategy(apikey, secretkey, signal_id):
         )
 
     else:
-        try:         
+        try:
             # jabejayii noghte hadaksar
             entry_price.max_price = price
             entry_price.save()
