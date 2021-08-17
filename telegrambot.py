@@ -45,7 +45,9 @@ def start(message):
 برای ثبت سیگنال فیوچرز از دستور /newsignalF
 برای ثبت سیگنال اسپات از دستور /newsignalS
 ثبت api key و secret key بایننس /savekeys
-نمایش کلید ذخیره کرده بایننس /showkeys"""
+نمایش کلید ذخیره کرده بایننس /showkeys
+نمایش بالانس حساب شما /showbalance
+"""
 )
 
 # show balance
@@ -417,6 +419,7 @@ def spot_order_status_check(message):
 
 
 try:
+    print('~~~~~~~~~~~~~~~~ BOT IS STARTED ~~~~~~~~~~~~~~')
     bot.polling(none_stop=True)
 
 except Exception as e:

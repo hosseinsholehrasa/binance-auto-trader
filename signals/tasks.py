@@ -31,8 +31,9 @@ from binance.exceptions import BinanceRequestException, BinanceAPIException, Bin
     BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException, \
     BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException
 
-
-
+binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrderException,
+                      BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException,
+                      BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
 
 
 # from django.conf import settings
@@ -44,12 +45,17 @@ from traderbot.celery import app
 secretkey = "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv"
 apikey = "ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT"
 
+
 # initialization
 def intialize_symbol_name():
-    client = Client(apikey, secretkey)
-    all_tackers_name = client.get_all_tickers()
-    symbol_names = [all_tackers_name[i]['symbol'] for i in range(len(all_tackers_name))]
-    return symbol_names
+    try:
+        client = Client(apikey, secretkey)
+        all_tackers_name = client.get_all_tickers()
+        symbol_names = [all_tackers_name[i]['symbol'] for i in range(len(all_tackers_name))]
+        return symbol_names
+    except binance_exceptions as e:
+        print(e.message)
+        return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ETHBTC"]
 
 stp1_spot = 50/100
 stp2_spot = 30/100
@@ -62,33 +68,45 @@ min_signal_price = 110 # dollor
 
 # main
 def live_price(symb):
-    client = Client(apikey, secretkey)
-    if symb.upper() in intialize_symbol_name():
-        price_dic = client.get_symbol_ticker(symbol=symb)
-        return float(price_dic['price'])
-    else:
-        return "wrong symbol name"
+    try:
+        client = Client(apikey, secretkey)
+        if symb.upper() in intialize_symbol_name():
+            price_dic = client.get_symbol_ticker(symbol=symb)
+            return float(price_dic['price'])
+        else:
+            return -1
+    except binance_exceptions as e:
+        print(e.message)
+        return -1
 
 def show_user_balance(apikey, secretkey, symbol, type="spot"):
-    client = Client(apikey, secretkey)
-    if type == 'spot':
-        balance = client.get_asset_balance(symbol)
-        return balance
-    return None
+    try:
+        client = Client(apikey, secretkey)
+        if type == 'spot':
+            balance = client.get_asset_balance(symbol)
+            return balance
+        return None
+    except binance_exceptions as e:
+        print(e.message)
+        return None
 
 def volume_checker(volume, symbol):
-    client = Client(apikey, secretkey)
-    info = client.get_symbol_info(symbol)
-    balance = client.get_asset_balance(info['quoteAsset'])
-    if float(balance['free']) < volume:
+    try:
+        client = Client(apikey, secretkey)
+        info = client.get_symbol_info(symbol)
+        balance = client.get_asset_balance(info['quoteAsset'])
+        if float(balance['free']) < volume:
+            return False
+        usd_volume = volume
+        if not info['quoteAsset'] in ["USDT", "BUSD", "USDC"]:
+            price = live_price(f"{info['quoteAsset']}USDT")
+            usd_volume = price * volume
+        if usd_volume < min_signal_price:
+            return False
+        return True
+    except binance_exceptions as e:
+        print(e.message)
         return False
-    usd_volume = volume
-    if not info['quoteAsset'] in ["USDT", "BUSD", "USDC"]:
-        price = live_price(f"{info['quoteAsset']}USDT")
-        usd_volume = price * volume
-    if usd_volume < min_signal_price:
-        return False
-    return True
 
 def round_decimals_down(number:float, decimals:int=6):
     """
@@ -117,17 +135,21 @@ def price_calculator(price, tick_size):
     return amount
 
 def price_filter_check(symbol, amount):
-    client = Client(apikey, secretkey)
-    info = client.get_symbol_info(symbol)
-    price = live_price(symbol)
-    for filter in info["filters"]:
-        if filter['filterType'] == "PERCENT_PRICE":
-            if not price * float(filter['multiplierDown'])  <= amount <= price * float(filter['multiplierUp']):
-                return False
-        if filter['filterType'] == "PRICE_FILTER":
-            if not float(filter['minPrice']) <= amount <= float(filter['maxPrice']):
-                return False
-    return True
+    try:
+        client = Client(apikey, secretkey)
+        info = client.get_symbol_info(symbol)
+        price = live_price(symbol)
+        for filter in info["filters"]:
+            if filter['filterType'] == "PERCENT_PRICE":
+                if not price * float(filter['multiplierDown'])  <= amount <= price * float(filter['multiplierUp']):
+                    return False
+            if filter['filterType'] == "PRICE_FILTER":
+                if not float(filter['minPrice']) <= amount <= float(filter['maxPrice']):
+                    return False
+        return True
+    except binance_exceptions as e:
+        print(e.message)
+        return False
 
 # def volume_filter_check(client, symbol, amount):
 #     info = client.get_symbol_info(symbol)
@@ -139,25 +161,32 @@ def price_filter_check(symbol, amount):
 
 
 def get_oco_order(client, order_list_id):
-    timestamp = client.get_server_time()["serverTime"]
-    params = {
-        "timestamp": timestamp,
-        "orderListId": order_list_id
-    }
-    return client._get("orderList", True , version='v3', data=params)
+    try:
+        timestamp = client.get_server_time()["serverTime"]
+        params = {
+            "timestamp": timestamp,
+            "orderListId": order_list_id
+        }
+        return client._get("orderList", True , version='v3', data=params)
 
+    except binance_exceptions as e:
+        print(e.message)
+        return None
 
 def create_3_oco_orders(apikey, secretkey, spot_controller_id):
     pass
 
 def cancel_oco_orders(client, *args):
-    for order in args:
-        order_response = get_oco_order(client, order.order_id)
-        if not order_response['listOrderStatus'] == "ALL_DONE":
-            client.cancel_order(symbol=order.symbol_name, orderId=order_response["orders"][0]["orderId"])
-            order.status = client.ORDER_STATUS_CANCELED
-            order.save()
-
+    try:
+        for order in args:
+            order_response = get_oco_order(client, order.order_id)
+            if not order_response['listOrderStatus'] == "ALL_DONE":
+                client.cancel_order(symbol=order.symbol_name, orderId=order_response["orders"][0]["orderId"])
+                order.status = client.ORDER_STATUS_CANCELED
+                order.save()
+    except binance_exceptions as e:
+        print(e.message)
+        return None
 
 # in OCO sell price is tp and limit and stop is stop loss
 # limit maker hamoon tp 
@@ -760,9 +789,7 @@ def spot_strategy(apikey, secretkey, signal_id):
                 tick_size = float(filter['tickSize'])
 
         mid_price = (entry_price.max_price + entry_price.min_price) / 2
-        binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrderException,
-                              BinanceOrderMinAmountException, BinanceOrderMinPriceException, BinanceOrderMinTotalException,
-                              BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
+
     except Exception as e:
         print(e.message)
         return 0
