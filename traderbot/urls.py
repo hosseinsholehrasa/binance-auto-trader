@@ -15,7 +15,19 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from rest_framework.views import APIView
+from django.conf import settings
+from rest_framework.response import Response
+
+
+class VersionView(APIView):
+
+    def get(self, request):
+        version = {"version": settings.APP_VERSION}
+        return Response(version)
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/stats/', VersionView.as_view()),
 ]
