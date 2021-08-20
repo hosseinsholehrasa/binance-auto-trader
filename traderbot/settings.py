@@ -19,13 +19,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
+APP_VERSION = "0.26.3"
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 's86121i%ha3^l%4t49+ua0nx7e&58yotfj6vb&7yd*0lko@qv_'
+SECRET_KEY = os.environ.get('SECRET_KEY', "afxaafawb82g638wgq87g7grayrby6468q2918+")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG_VALUE', "True") == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS'), '0.0.0.0', 'localhost', '127.0.0.1']
+
+
+CORS_ORIGIN_WHITELIST = [origin.strip() for origin in
+                         os.environ.get("CORS_ORIGINS", "http://127.0.0.1:8080").split(',')]
 
 
 # Application definition
@@ -133,6 +139,6 @@ CELERY_RESULT_BACKEND = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
 CELERY_TIMEZONE = 'Asia/Tehran'
 
 
-TELEGRAM_KEY = "1884943655:AAE-P9d6t6XOcLjTvE9ipvwHh8Vp_NTdA1c"
-BINANCE_API_KEY = "ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT"
-BINANCE_SECRET_KEY = "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv"
+TELEGRAM_KEY = os.environ.get("TELEGRAM_KEY")
+BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY")
+BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY")

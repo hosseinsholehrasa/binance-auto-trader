@@ -36,14 +36,12 @@ binance_exceptions = (BinanceRequestException, BinanceAPIException, BinanceOrder
                       BinanceOrderUnknownSymbolException, BinanceOrderInactiveSymbolException)
 
 
-# from django.conf import settings
+from django.conf import settings
 from traderbot.celery import app
 
 
-# secretkey = settings.BINANCE_SECRET_KEY
-# apikey = settings.BINANCE_API_KEY
-secretkey = "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv"
-apikey = "ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT"
+secretkey = settings.BINANCE_SECRET_KEY
+apikey = settings.BINANCE_API_KEY
 
 
 # initialization
