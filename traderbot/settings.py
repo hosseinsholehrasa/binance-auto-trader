@@ -19,7 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', "afxaafawb82g638wgq87g7grayrby6468q2918+")
@@ -141,7 +141,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
 PROJECT_ROOT = os.path.join(os.path.abspath(__file__))
-STATIC_URL = '/api/static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join('staticfiles')
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
