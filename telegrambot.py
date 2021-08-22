@@ -1,8 +1,10 @@
 ####################################################################################
 import os
+
 # for combining django and telegram
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "traderbot.settings")
 from django.core.wsgi import get_wsgi_application
+
 application = get_wsgi_application()
 #####################################################################################
 import telebot
@@ -21,12 +23,14 @@ from signals.tasks import intialize_symbol_name, live_price, spot_strategy, pric
 # INITIALIZATION
 apikey = settings.TELEGRAM_KEY
 bot = telebot.TeleBot(apikey)
-levrage_numbers = [i for i in range(1,126)]
+levrage_numbers = [i for i in range(1, 126)]
 symboles = intialize_symbol_name()
 moneybag_emojy = u'\U0001F4B0'
 key_emojy = u'\U0001F511'
 
 """ for convert string to int or float and check its str or not """
+
+
 def int_or_float(str):
     if str.isdigit():
         return True, int(str)
@@ -36,11 +40,13 @@ def int_or_float(str):
         except:
             return False, str
 
+
 def not_cancelled(message):
     print(message.text)
     if message.text == "cancel":
         return False
     return True
+
 
 ##########################################################################
 # start button
@@ -51,22 +57,24 @@ def start(message):
     text = """خوش آمدید
 """
 
-# برای ثبت سیگنال اسپات از دستور /newsignalspot
-# ثبت api key و secret key بایننس /savekeys
-# نمایش کلید ذخیره کرده بایننس /showkeys
-# نمایش بالانس حساب شما /showbalance
-# )
+    # برای ثبت سیگنال اسپات از دستور /newsignalspot
+    # ثبت api key و secret key بایننس /savekeys
+    # نمایش کلید ذخیره کرده بایننس /showkeys
+    # نمایش بالانس حساب شما /showbalance
+    # )
     keyboard = telebot.types.ReplyKeyboardMarkup(True)
     keyboard.row("new signal spot")
     keyboard.row(f"show balance {moneybag_emojy}", f"save binance keys {key_emojy}", f"show binance keys {key_emojy}")
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
+
 # show balance
 @bot.message_handler(regexp="show balance .*")
 def show_asset_balance(message):
     sent = bot.reply_to(message, "Enter symbol name\n for example USDT")
     bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
+
 
 def symbol_asset_balance_reciever(message):
     user = BinanceUser.objects.get(telegram_user=message.chat.id)
@@ -87,6 +95,7 @@ def save_keys(message):
     sent = bot.reply_to(message, "Enter your binance api_key")
     bot.register_next_step_handler(sent, save_api_key)
 
+
 def save_api_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
@@ -101,6 +110,7 @@ def save_api_key(message):
 
     bot.delete_message(message.chat.id, message.message_id)
 
+
 def save_secret_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
@@ -112,6 +122,7 @@ def save_secret_key(message):
         bot.register_next_step_handler(message, save_secret_key)
 
     bot.delete_message(message.chat.id, message.message_id)
+
 
 # show api keys
 @bot.message_handler(commands=['showkeys'])
@@ -126,6 +137,7 @@ def show_keys(message):
     else:
         bot.send_message(message.chat.id, "you have to save keys first")
 
+
 ##########################################################################
 
 # Balance button
@@ -133,10 +145,12 @@ def show_keys(message):
 def show_balance(message):
     pass
 
+
 # live data button
 @bot.message_handler(commands=['price'])
 def show_live_price(message):
     pass
+
 
 # show transaction status button
 @bot.message_handler(commands=['price'])
@@ -150,6 +164,7 @@ def show_transaction_status(message):
 def signal_receiver(message):
     sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ")
     bot.register_next_step_handler(sent, symbol_receiver)
+
 
 def symbol_receiver(message):
     signal_id = 0
@@ -203,7 +218,7 @@ def take_profit_reciever(message, signal_id):
     tps = message.text.split()
 
     # check all of the three is integer
-    if len(tps) == 3 and all(x.isdigit() for x in tps) :
+    if len(tps) == 3 and all(x.isdigit() for x in tps):
         tpsint = [int(x) for x in tps]
         sent = bot.reply_to(message, 'Enter your stop loss price')
         bot.register_next_step_handler(sent, stop_loss_reciever, signal_id)
@@ -236,7 +251,7 @@ def levrage_reciever(message, signal_id):
 
 
 def position_reciever(message, signal_id):
-    if  message.text.lower() in ["buy", "sell"]:
+    if message.text.lower() in ["buy", "sell"]:
         # if position side is buy then position is 1 and for sell is 0
         if message.text.lower() == "buy":
             position = 1
@@ -252,7 +267,6 @@ def position_reciever(message, signal_id):
         bot.register_next_step_handler(message, position_reciever, signal_id)
 
 
-
 # TODO give volume by percent or dollor
 # TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
@@ -262,10 +276,11 @@ def spot_signal_receiver(message):
     sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ")
     bot.register_next_step_handler(sent, spot_symbol_receiver)
 
+
 def spot_symbol_receiver(message):
     if message.text.upper() in symboles:
         tel_user = TelegramUser.objects.get(id=message.chat.id)
-        spot = SpotSignal.objects.create(telegram_user=tel_user ,symbol_name=message.text.upper())
+        spot = SpotSignal.objects.create(telegram_user=tel_user, symbol_name=message.text.upper())
 
         sent = bot.reply_to(
             message, f'Enter your entry price zone \nfor example 38000-44000\
@@ -320,9 +335,10 @@ def spot_volume_reciever(message, signal_id):
         sent = bot.send_message(message.chat.id, 'please enter a number')
         bot.register_next_step_handler(message, spot_volume_reciever, signal_id)
 
+
 def spot_take_profit_number_reciever(message, signal_id):
     if message.text.isdigit():
-        take_profit_number=3
+        take_profit_number = 3
         sent = bot.send_message(message.chat.id, 'please enter your take profit price 1:\n'
                                                  'you have to wait ~20 second to validate your price numbers')
         bot.register_next_step_handler(sent, spot_take_profit_reciever, signal_id, take_profit_number)
@@ -330,7 +346,8 @@ def spot_take_profit_number_reciever(message, signal_id):
         sent = bot.send_message(message.chat.id, 'please enter a number')
         bot.register_next_step_handler(message, spot_take_profit_number_reciever, signal_id)
 
-def spot_take_profit_reciever(message, signal_id, take_profit_number, number_position= 1):
+
+def spot_take_profit_reciever(message, signal_id, take_profit_number, number_position=1):
     print(number_position)
     is_number, txt = int_or_float(message.text)
     if number_position < take_profit_number:
@@ -370,10 +387,12 @@ def spot_take_profit_reciever(message, signal_id, take_profit_number, number_pos
                                                number_position)
         else:
             sent = bot.send_message(message.chat.id, 'please enter numbers')
-            bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number, number_position)
+            bot.register_next_step_handler(message, spot_take_profit_reciever, signal_id, take_profit_number,
+                                           number_position)
     else:
         sent = bot.reply_to(message, 'Enter your stop loss price')
         bot.register_next_step_handler(sent, spot_stop_loss_reciever, signal_id)
+
 
 def spot_stop_loss_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
@@ -388,7 +407,7 @@ def spot_stop_loss_reciever(message, signal_id):
             spot_strategy.apply_async(
                 (binance.api_key, binance.secret_key, spot.id),
                 countdown=random.uniform(10, 15),
-                )
+            )
 
             sent = bot.reply_to(message, f'your order is submitted\n your order id is {spot.id} you can get more information \
             by sending your order id to /orderstatus')
@@ -408,7 +427,6 @@ def spot_order_status(message):
 
 
 def spot_order_status_check(message):
-
     spot = SpotSignal.objects.filter(telegram_user=message.chat.id, id=message.text)
     if spot:
         spot = spot[0]
