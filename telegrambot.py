@@ -23,6 +23,8 @@ apikey = settings.TELEGRAM_KEY
 bot = telebot.TeleBot(apikey)
 levrage_numbers = [i for i in range(1,126)]
 symboles = intialize_symbol_name()
+moneybag_emojy = u'\U0001F4B0'
+key_emojy = u'\U0001F511'
 
 """ for convert string to int or float and check its str or not """
 def int_or_float(str):
@@ -34,24 +36,34 @@ def int_or_float(str):
         except:
             return False, str
 
+def not_cancelled(message):
+    print(message.text)
+    if message.text == "cancel":
+        return False
+    return True
+
 ##########################################################################
 # start button
 @bot.message_handler(commands=['start'])
 def start(message):
     telegram_user, is_created = TelegramUser.objects.get_or_create(id=message.chat.id)
     BinanceUser.objects.get_or_create(telegram_user=telegram_user)
-    bot.reply_to(message,
-"""خوش آمدید
-برای ثبت سیگنال فیوچرز از دستور /newsignalF
-برای ثبت سیگنال اسپات از دستور /newsignalS
-ثبت api key و secret key بایننس /savekeys
-نمایش کلید ذخیره کرده بایننس /showkeys
-نمایش بالانس حساب شما /showbalance
+    text = """خوش آمدید
 """
-)
+
+# برای ثبت سیگنال اسپات از دستور /newsignalspot
+# ثبت api key و secret key بایننس /savekeys
+# نمایش کلید ذخیره کرده بایننس /showkeys
+# نمایش بالانس حساب شما /showbalance
+# )
+    keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    keyboard.row("new signal spot")
+    keyboard.row(f"show balance {moneybag_emojy}", f"save binance keys {key_emojy}", f"show binance keys {key_emojy}")
+
+    bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 # show balance
-@bot.message_handler(commands=['showbalance'])
+@bot.message_handler(regexp="show balance .*")
 def show_asset_balance(message):
     sent = bot.reply_to(message, "Enter symbol name\n for example USDT")
     bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
@@ -245,7 +257,7 @@ def position_reciever(message, signal_id):
 # TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
 
-@bot.message_handler(commands=['newsignalS'])
+@bot.message_handler(commands=['newsignalspot'])
 def spot_signal_receiver(message):
     sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ")
     bot.register_next_step_handler(sent, spot_symbol_receiver)
@@ -389,12 +401,6 @@ def spot_stop_loss_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_stop_loss_reciever, signal_id)
 
 
-# spot_strategy.delay("ZrZe7Sl17mcok8gEKe5SKQy9Jcpcggn3JK0J7LZWXmCU6d6ZZ8073Mjr3nw476JT", "hnA7Zepip4mpX3WqbUBStyLwa5ZPrpVbnjrERYL0VymjTqwNUo5LUUYEYj8MIqBv" , 15)
-# @bot.message_handler()
-# def stock_request(message):
-#     request = message.text.split()
-#     bot.send_message(message.chat.id, message.text)
-
 @bot.message_handler(commands=['orderstatus'])
 def spot_order_status(message):
     sent = bot.reply_to(message, "Enter your spot signal id ")
@@ -423,6 +429,11 @@ try:
     bot.polling(none_stop=True)
 
 except Exception as e:
-    print(e.message)
+    print(e)
     time.sleep(15)
+    print('~~~~~~~~~~~~~~~~ BOT IS RESTARTED ~~~~~~~~~~~~~~')
+    bot.polling(none_stop=True)
+finally:
+    time.sleep(15)
+    print('~~~~~~~~~~~~~~~~ BOT IS RESTARTED ~~~~~~~~~~~~~~')
     bot.polling(none_stop=True)
