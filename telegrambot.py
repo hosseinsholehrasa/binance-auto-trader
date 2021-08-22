@@ -72,7 +72,8 @@ def start(message):
 # show balance
 @bot.message_handler(regexp="show balance .*")
 def show_asset_balance(message):
-    sent = bot.reply_to(message, "Enter symbol name\n for example USDT")
+    keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
+    sent = bot.reply_to(message, "Enter symbol name\n for example USDT", reply_markup=keyboard)
     bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
 
 
@@ -90,7 +91,7 @@ def symbol_asset_balance_reciever(message):
 
 
 #  save binance api keys button
-@bot.message_handler(commands=['savekeys'])
+@bot.message_handler(regexp="save binance keys .*")
 def save_keys(message):
     sent = bot.reply_to(message, "Enter your binance api_key")
     bot.register_next_step_handler(sent, save_api_key)
@@ -125,7 +126,7 @@ def save_secret_key(message):
 
 
 # show api keys
-@bot.message_handler(commands=['showkeys'])
+@bot.message_handler(regexp="show binance keys .*")
 def show_keys(message):
     binance_user = BinanceUser.objects.get(telegram_user=message.chat.id)
     if binance_user.api_key and binance_user.secret_key:
@@ -271,7 +272,7 @@ def position_reciever(message, signal_id):
 # TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
 
-@bot.message_handler(commands=['newsignalspot'])
+@bot.message_handler(regexp="new signal spot .*")
 def spot_signal_receiver(message):
     sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ")
     bot.register_next_step_handler(sent, spot_symbol_receiver)
