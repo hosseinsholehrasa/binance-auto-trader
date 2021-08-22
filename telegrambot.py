@@ -27,6 +27,7 @@ levrage_numbers = [i for i in range(1, 126)]
 symboles = intialize_symbol_name()
 moneybag_emojy = u'\U0001F4B0'
 key_emojy = u'\U0001F511'
+cancel_emojy = u'U0001F6AB'
 
 """ for convert string to int or float and check its str or not """
 
@@ -63,21 +64,44 @@ def start(message):
     # نمایش بالانس حساب شما /showbalance
     # )
     keyboard = telebot.types.ReplyKeyboardMarkup(True)
-    keyboard.row("new signal spot")
+    keyboard.row("new signal spot", "order status")
     keyboard.row(f"show balance {moneybag_emojy}", f"save binance keys {key_emojy}", f"show binance keys {key_emojy}")
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
+# menu button
+@bot.message_handler(regexp="menu.*")
+def menu(message):
+    text ="""بازگشت به منو
+    
+"""
+    keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    keyboard.row("new signal spot", "order status")
+    keyboard.row(f"show balance {moneybag_emojy}", f"save binance keys {key_emojy}", f"show binance keys {key_emojy}")
+
+    bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 # show balance
-@bot.message_handler(regexp="show balance .*")
+@bot.message_handler(regexp="show balance.*")
 def show_asset_balance(message):
-    keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
-    sent = bot.reply_to(message, "Enter symbol name\n for example USDT", reply_markup=keyboard)
+    # cancel keyboard
+    cancel_keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    cancel_keyboard.row(f"cancel {cancel_emojy}")
+
+    sent = bot.reply_to(message, "Enter symbol name\n for example USDT", reply_markup=cancel_keyboard)
     bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
 
 
 def symbol_asset_balance_reciever(message):
+    # check if the cancel button clicked
+    if message.text == f"cancel {cancel_emojy}":
+        # remove cancel keyboard
+        remove_keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
+        sent = bot.send_message(message.chat.id, "Cancelled", reply_markup=remove_keyboard)
+        # send it to menu
+        menu(sent)
+        return 0
+
     user = BinanceUser.objects.get(telegram_user=message.chat.id)
     balance = show_user_balance(user.api_key, user.secret_key, message.text)
     if not balance:
@@ -91,9 +115,10 @@ def symbol_asset_balance_reciever(message):
 
 
 #  save binance api keys button
-@bot.message_handler(regexp="save binance keys .*")
+@bot.message_handler(regexp="save binance keys.*")
 def save_keys(message):
-    sent = bot.reply_to(message, "Enter your binance api_key")
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+    sent = bot.reply_to(message, "Enter your binance api_key", reply_markup=markup)
     bot.register_next_step_handler(sent, save_api_key)
 
 
@@ -126,15 +151,17 @@ def save_secret_key(message):
 
 
 # show api keys
-@bot.message_handler(regexp="show binance keys .*")
+@bot.message_handler(regexp="show binance keys.*")
 def show_keys(message):
     binance_user = BinanceUser.objects.get(telegram_user=message.chat.id)
     if binance_user.api_key and binance_user.secret_key:
+        markup = telebot.types.ReplyKeyboardRemove(selective=False)
         # censor the keys
         bot.send_message(
             message.chat.id,
             f"api_key: \n{binance_user.api_key[:10]}*****{binance_user.api_key[55:]} \
-                \nsecret_key: \n{binance_user.secret_key[:10]}*****{binance_user.secret_key[55:]}")
+                \nsecret_key: \n{binance_user.secret_key[:10]}*****{binance_user.secret_key[55:]}",
+            reply_markup=markup)
     else:
         bot.send_message(message.chat.id, "you have to save keys first")
 
@@ -272,9 +299,10 @@ def position_reciever(message, signal_id):
 # TODO add check that a user have all api
 ########################################################################### NEW SIGNAL SPOT
 
-@bot.message_handler(regexp="new signal spot .*")
+@bot.message_handler(regexp="new signal spot.*")
 def spot_signal_receiver(message):
-    sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ")
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+    sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ", reply_markup=markup)
     bot.register_next_step_handler(sent, spot_symbol_receiver)
 
 
@@ -421,9 +449,10 @@ def spot_stop_loss_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_stop_loss_reciever, signal_id)
 
 
-@bot.message_handler(commands=['orderstatus'])
+@bot.message_handler(regexp="order status.*")
 def spot_order_status(message):
-    sent = bot.reply_to(message, "Enter your spot signal id ")
+    markup = telebot.types.ReplyKeyboardRemove(selective=False)
+    sent = bot.reply_to(message, "Enter your spot signal id ", reply_markup=markup)
     bot.register_next_step_handler(sent, spot_order_status_check)
 
 
