@@ -45,7 +45,7 @@ def int_or_float(str):
 
 # cancel checker decorator
 def cancel_checker(func):
-    def not_cancelled(message):
+    def not_cancelled(message, *args):
         if message.text == f"cancel {cancel_emojy}":
             # remove cancel keyboard
             remove_keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
@@ -53,7 +53,7 @@ def cancel_checker(func):
             # send it to menu
             menu(sent)
             return 0
-        return func(message)
+        return func(message, *args)
     return not_cancelled
 
 ##########################################################################
@@ -119,11 +119,15 @@ def symbol_asset_balance_reciever(message):
 #  save binance api keys button
 @bot.message_handler(regexp="save binance keys.*")
 def save_keys(message):
-    markup = telebot.types.ReplyKeyboardRemove(selective=False)
-    sent = bot.reply_to(message, "Enter your binance api_key", reply_markup=markup)
+    # cancel keyboard
+    cancel_keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    cancel_keyboard.row(f"cancel {cancel_emojy}")
+
+    sent = bot.reply_to(message, "Enter your binance api_key", reply_markup=cancel_keyboard)
     bot.register_next_step_handler(sent, save_api_key)
 
 
+@cancel_checker
 def save_api_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
@@ -139,12 +143,15 @@ def save_api_key(message):
     bot.delete_message(message.chat.id, message.message_id)
 
 
+@cancel_checker
 def save_secret_key(message):
     if len(message.text) == 64:
         user = BinanceUser.objects.get(telegram_user=message.chat.id)
         user.secret_key = message.text
         user.save()
-        bot.send_message(message.chat.id, 'DONE')
+        sent = bot.send_message(message.chat.id, 'DONE')
+        # send back to menu
+        menu(sent)
     else:
         bot.send_message(message.chat.id, 'Please enter a correct keys')
         bot.register_next_step_handler(message, save_secret_key)
@@ -158,12 +165,16 @@ def show_keys(message):
     binance_user = BinanceUser.objects.get(telegram_user=message.chat.id)
     if binance_user.api_key and binance_user.secret_key:
         markup = telebot.types.ReplyKeyboardRemove(selective=False)
+
         # censor the keys
-        bot.send_message(
+        sent=bot.send_message(
             message.chat.id,
             f"api_key: \n{binance_user.api_key[:10]}*****{binance_user.api_key[55:]} \
-                \nsecret_key: \n{binance_user.secret_key[:10]}*****{binance_user.secret_key[55:]}",
+            \nsecret_key: \n{binance_user.secret_key[:10]}*****{binance_user.secret_key[55:]}",
             reply_markup=markup)
+
+        # send back to menu
+        menu(sent)
     else:
         bot.send_message(message.chat.id, "you have to save keys first")
 
@@ -303,11 +314,15 @@ def position_reciever(message, signal_id):
 
 @bot.message_handler(regexp="new signal spot.*")
 def spot_signal_receiver(message):
-    markup = telebot.types.ReplyKeyboardRemove(selective=False)
-    sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ", reply_markup=markup)
+    # cancel keyboard
+    cancel_keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    cancel_keyboard.row(f"cancel {cancel_emojy}")
+
+    sent = bot.reply_to(message, "Enter your symbol\nfor example (BTCUSDT) ", reply_markup=cancel_keyboard)
     bot.register_next_step_handler(sent, spot_symbol_receiver)
 
 
+@cancel_checker
 def spot_symbol_receiver(message):
     if message.text.upper() in symboles:
         tel_user = TelegramUser.objects.get(id=message.chat.id)
@@ -322,6 +337,7 @@ def spot_symbol_receiver(message):
         bot.register_next_step_handler(message, spot_symbol_receiver)
 
 
+@cancel_checker
 def spot_entry_price_reciever(message, signal_id):
     numbers = message.text.split("-")
     numbers_arr = []
@@ -347,7 +363,7 @@ def spot_entry_price_reciever(message, signal_id):
         sent = bot.send_message(message.chat.id, 'please enter a number and check the correct format')
         bot.register_next_step_handler(message, spot_entry_price_reciever, signal_id)
 
-
+@cancel_checker
 def spot_volume_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
     if is_number:
@@ -367,6 +383,7 @@ def spot_volume_reciever(message, signal_id):
         bot.register_next_step_handler(message, spot_volume_reciever, signal_id)
 
 
+@cancel_checker
 def spot_take_profit_number_reciever(message, signal_id):
     if message.text.isdigit():
         take_profit_number = 3
@@ -377,7 +394,7 @@ def spot_take_profit_number_reciever(message, signal_id):
         sent = bot.send_message(message.chat.id, 'please enter a number')
         bot.register_next_step_handler(message, spot_take_profit_number_reciever, signal_id)
 
-
+@cancel_checker
 def spot_take_profit_reciever(message, signal_id, take_profit_number, number_position=1):
     print(number_position)
     is_number, txt = int_or_float(message.text)
@@ -425,6 +442,7 @@ def spot_take_profit_reciever(message, signal_id, take_profit_number, number_pos
         bot.register_next_step_handler(sent, spot_stop_loss_reciever, signal_id)
 
 
+@cancel_checker
 def spot_stop_loss_reciever(message, signal_id):
     is_number, txt = int_or_float(message.text)
     if is_number:
@@ -442,6 +460,9 @@ def spot_stop_loss_reciever(message, signal_id):
 
             sent = bot.reply_to(message, f'your order is submitted\n your order id is {spot.id} you can get more information \
             by sending your order id to /orderstatus')
+
+            # send back to menu
+            menu(sent)
         else:
             sent = bot.send_message(message.chat.id, "your price number not in range of this symbol price")
             bot.register_next_step_handler(sent, spot_stop_loss_reciever, signal_id)
@@ -453,11 +474,15 @@ def spot_stop_loss_reciever(message, signal_id):
 
 @bot.message_handler(regexp="order status.*")
 def spot_order_status(message):
-    markup = telebot.types.ReplyKeyboardRemove(selective=False)
-    sent = bot.reply_to(message, "Enter your spot signal id ", reply_markup=markup)
+    # cancel keyboard
+    cancel_keyboard = telebot.types.ReplyKeyboardMarkup(True)
+    cancel_keyboard.row(f"cancel {cancel_emojy}")
+
+    sent = bot.reply_to(message, "Enter your spot signal id ", reply_markup=cancel_keyboard)
     bot.register_next_step_handler(sent, spot_order_status_check)
 
 
+@cancel_checker
 def spot_order_status_check(message):
     spot = SpotSignal.objects.filter(telegram_user=message.chat.id, id=message.text)
     if spot:
@@ -470,9 +495,11 @@ def spot_order_status_check(message):
                             f"take profites-> tp1:{tp1.price} - tp2:{tp2.price} - tp3:{tp3.price} \n"
                             f"stop loss: {spot.stop_loss}\n"
                             f"  ")
+        # send back to menu
+        menu(sent)
     else:
         sent = bot.reply_to(message, "You dont have access to this order or not found")
-
+        bot.register_next_step_handler(sent, spot_order_status_check)
 
 try:
     print('~~~~~~~~~~~~~~~~ BOT IS STARTED ~~~~~~~~~~~~~~')
