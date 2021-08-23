@@ -25,9 +25,11 @@ apikey = settings.TELEGRAM_KEY
 bot = telebot.TeleBot(apikey)
 levrage_numbers = [i for i in range(1, 126)]
 symboles = intialize_symbol_name()
+
+# emojy unicode
 moneybag_emojy = u'\U0001F4B0'
 key_emojy = u'\U0001F511'
-cancel_emojy = u'U0001F6AB'
+cancel_emojy = u'\U0001F6AB'
 
 """ for convert string to int or float and check its str or not """
 
@@ -41,13 +43,18 @@ def int_or_float(str):
         except:
             return False, str
 
-
-def not_cancelled(message):
-    print(message.text)
-    if message.text == "cancel":
-        return False
-    return True
-
+# cancel checker decorator
+def cancel_checker(func):
+    def not_cancelled(message):
+        if message.text == f"cancel {cancel_emojy}":
+            # remove cancel keyboard
+            remove_keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
+            sent = bot.send_message(message.chat.id, "Cancelled", reply_markup=remove_keyboard)
+            # send it to menu
+            menu(sent)
+            return 0
+        return func(message)
+    return not_cancelled
 
 ##########################################################################
 # start button
@@ -91,16 +98,9 @@ def show_asset_balance(message):
     sent = bot.reply_to(message, "Enter symbol name\n for example USDT", reply_markup=cancel_keyboard)
     bot.register_next_step_handler(sent, symbol_asset_balance_reciever)
 
-
+@cancel_checker
 def symbol_asset_balance_reciever(message):
     # check if the cancel button clicked
-    if message.text == f"cancel {cancel_emojy}":
-        # remove cancel keyboard
-        remove_keyboard = telebot.types.ReplyKeyboardRemove(selective=False)
-        sent = bot.send_message(message.chat.id, "Cancelled", reply_markup=remove_keyboard)
-        # send it to menu
-        menu(sent)
-        return 0
 
     user = BinanceUser.objects.get(telegram_user=message.chat.id)
     balance = show_user_balance(user.api_key, user.secret_key, message.text)
@@ -112,6 +112,8 @@ def symbol_asset_balance_reciever(message):
             message.chat.id,
             f"{balance['asset']}: \nfree:{balance['free']}\nlocked:{balance['locked']}"
         )
+        # send back to menu
+        menu(sent)
 
 
 #  save binance api keys button
